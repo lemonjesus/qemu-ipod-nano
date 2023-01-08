@@ -85,8 +85,11 @@ static void apple_spi_run(S5L8900SPIState *s)
     uint32_t tx;
     uint32_t rx;
 
+    fprintf(stderr, "apple_spi_run\n");
+
     if (!(REG(s, R_CTRL) & R_CTRL_RUN)) {
-        return;
+        fprintf(stderr, "apple_spi_run: not running\n");
+        // return;
     }
 
     while (!fifo8_is_empty(&s->tx_fifo)) {
@@ -127,7 +130,7 @@ static void apple_spi_run(S5L8900SPIState *s)
 static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    //fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
+    fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
 
     uint32_t r;
     bool run = false;
@@ -173,7 +176,7 @@ static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    //fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
+    fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
 
     uint32_t r = data;
     uint32_t *mmio = &REG(s, addr);
@@ -274,6 +277,9 @@ static void s5l8900_spi_realize(DeviceState *dev, struct Error **errp)
     // create the peripheral
     switch(s->base) {
         case 0:
+            BlockBackend* blk = s->nor_drive ? blk_by_legacy_dinfo(s->nor_drive) : NULL;
+            qdev_prop_set_drive_err(s->spi, "drive", blk, NULL);
+            dev = ssi_create_peripheral(s->spi, "sst25vf080b");
             break;
         case 1:
             ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_LCD_PANEL);

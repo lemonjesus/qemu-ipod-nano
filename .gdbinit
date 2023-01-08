@@ -6,3 +6,14 @@
 
 # Load QEMU-specific sub-commands and settings
 source scripts/qemu-gdb.py
+
+set pagination off
+target remote localhost:1234
+
+tui new-layout vmdebug {-horizontal asm 1 regs 1} 2 cmd 1
+layout vmdebug
+focus cmd
+set confirm off
+
+break *0x20003010
+continue

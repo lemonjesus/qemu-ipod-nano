@@ -74,7 +74,7 @@ static void ipod_touch_cpu_reset(void *opaque)
 
     //env->regs[0] = nms->kbootargs_pa;
     //cpu_set_pc(CPU(cpu), 0xc00607ec);
-    cpu_set_pc(CPU(cpu), IBOOT_BASE);
+    cpu_set_pc(CPU(cpu), 0);
     //env->regs[0] = 0x9000000;
     //cpu_set_pc(CPU(cpu), LLB_BASE + 0x100);
     //cpu_set_pc(CPU(cpu), VROM_MEM_BASE);
@@ -178,40 +178,41 @@ static const MemoryRegionOps mbx_ops = {
 static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem, AddressSpace *nsas)
 {
     IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(machine);
-    DriveInfo *dinfo;
 
     allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
 
     // allocate UART ram
     allocate_ram(sysmem, "ram", RAM_MEM_BASE, 0x8000000);
 
-    // load the bootrom (vrom)
+    // load the bootrom
     uint8_t *file_data = NULL;
     unsigned long fsize;
     if (g_file_get_contents(nms->bootrom_path, (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "vrom", VROM_MEM_BASE, 0x10000);
+        allocate_ram(sysmem, "vrom", 0, 0x10000);
+        address_space_rw(nsas, 0, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+
+        allocate_ram(sysmem, "vrom1", VROM_MEM_BASE, 0x10000);
         address_space_rw(nsas, VROM_MEM_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     }
 
-    // patch the address table to point to our own routines
-    uint32_t *data = malloc(4);
-    data[0] = LLB_BASE + 0x80;
-    address_space_rw(nsas, 0x2000008c, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
-    data[0] = LLB_BASE + 0x100;
-    address_space_rw(nsas, 0x20000090, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+    // // patch the address table to point to our own routines
+    // uint32_t *data = malloc(4);
+    // data[0] = LLB_BASE + 0x80;
+    // address_space_rw(nsas, 0x2000008c, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+    // data[0] = LLB_BASE + 0x100;
+    // address_space_rw(nsas, 0x20000090, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
 
     // load iBoot
-    file_data = NULL;
-    if (g_file_get_contents(nms->iboot_path, (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "iboot", IBOOT_BASE, 0x400000);
-        address_space_rw(nsas, IBOOT_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
-     }
+    // file_data = NULL;
+    // if (g_file_get_contents(nms->iboot_path, (char **)&file_data, &fsize, NULL)) {
+        
+    //  }
 
     // // load LLB
     // file_data = NULL;
     // if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/LLB.n45ap.RELEASE", (char **)&file_data, &fsize, NULL)) {
-    //     allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(fsize));
-    //     address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
+        allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(0x400000));
+        // address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     //  }
 
     allocate_ram(sysmem, "edgeic", EDGEIC_MEM_BASE, 0x1000);
@@ -227,13 +228,13 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 
     // setup 1MB NOR
-    dinfo = drive_get(IF_PFLASH, 0, 0);
-    if (!dinfo) {
+    nms->nor_drive = drive_get(IF_PFLASH, 0, 0);
+    if (!nms->nor_drive) {
         printf("A NOR image must be given with the -pflash parameter\n");
         abort();
     }
 
-    if(!pflash_cfi02_register(NOR_MEM_BASE, "nor", 1024 * 1024, dinfo ? blk_by_legacy_dinfo(dinfo) : NULL, 4096, 1, 2, 0x00bf, 0x273f, 0x0, 0x0, 0x555, 0x2aa, 0)) {
+    if(!pflash_cfi02_register(NOR_MEM_BASE, "nor", 1024 * 1024, nms->nor_drive ? blk_by_legacy_dinfo(nms->nor_drive) : NULL, 4096, 1, 2, 0x00bf, 0x273f, 0x0, 0x0, 0x555, 0x2aa, 0)) {
         printf("Error registering NOR flash!\n");
         abort();
     }
@@ -457,7 +458,9 @@ static void ipod_touch_machine_init(MachineState *machine)
 
     // init spis
     set_spi_base(0);
-    sysbus_create_simple("s5l8900spi", SPI0_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI0_IRQ));
+    dev = sysbus_create_simple("s5l8900spi", SPI0_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI0_IRQ));
+    S5L8900SPIState *spi0_state = S5L8900SPI(dev);
+    spi0_state->nor_drive = nms->nor_drive;
 
     set_spi_base(1);
     sysbus_create_simple("s5l8900spi", SPI1_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI1_IRQ));
@@ -532,14 +535,14 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_init_io(iomem, OBJECT(s), &usb_phys_ops, usb_state, "usbphys", 0x40);
     memory_region_add_subregion(sysmem, USBPHYS_MEM_BASE, iomem);
 
-    // init 8900 OPS
-    allocate_ram(sysmem, "8900ops", LLB_BASE, 0x1000);
+    // // init 8900 OPS
+    // allocate_ram(sysmem, "8900ops", LLB_BASE, 0x1000);
 
-    // patch the instructions related to 8900 decryption
+    // // patch the instructions related to 8900 decryption
     uint32_t *data = malloc(sizeof(uint32_t) * 2);
-    data[0] = 0xe3b00001; // MOVS R0, #1
-    data[1] = 0xe12fff1e; // BX LR
-    address_space_rw(nsas, LLB_BASE + 0x80, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 2, 1);
+    // data[0] = 0xe3b00001; // MOVS R0, #1
+    // data[1] = 0xe12fff1e; // BX LR
+    // address_space_rw(nsas, LLB_BASE + 0x80, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 2, 1);
 
     /*
     load the decryption logic in memory. These bytes correspond to the following ARMv6 instructions:
@@ -554,7 +557,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     data[1] = 0xE5810000; // STR r0,[r1]
     data[2] = 0xE3B00001; // MOVS R0, #1
     data[3] = 0xE12FFF1E; // BX lr
-    address_space_rw(nsas, LLB_BASE + 0x100, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 4, 1);
+    // address_space_rw(nsas, LLB_BASE + 0x100, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 4, 1);
 
     // contains some constants
     data = malloc(4);
@@ -658,7 +661,7 @@ static void ipod_touch_machine_class_init(ObjectClass *obj, void *data)
     mc->desc = "iPod Touch";
     mc->init = ipod_touch_machine_init;
     mc->max_cpus = 1;
-    mc->default_cpu_type = ARM_CPU_TYPE_NAME("arm1176");
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("arm926ej-s");
 }
 
 static const TypeInfo ipod_touch_machine_info = {

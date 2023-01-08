@@ -79,6 +79,8 @@ typedef struct S5L8900SPIState {
     uint32_t regs[MMIO_SIZE >> 2];
     uint32_t mmio_size;
     uint8_t base;
+
+    DriveInfo *nor_drive;
 } S5L8900SPIState;
 
 void set_spi_base(uint32_t base);
