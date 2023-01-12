@@ -15,5 +15,6 @@ layout vmdebug
 focus cmd
 set confirm off
 
-break *0x2200e604
+# first instruction of a module! maps to 40080242 efi_DxeMain_entrypoint in Ghidra
+break *0x9fbf242
 continue

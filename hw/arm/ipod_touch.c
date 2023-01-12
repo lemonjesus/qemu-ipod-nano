@@ -559,34 +559,13 @@ static void ipod_touch_machine_init(MachineState *machine)
     memory_region_init_io(iomem, OBJECT(s), &usb_phys_ops, usb_state, "usbphys", 0x40);
     memory_region_add_subregion(sysmem, USBPHYS_MEM_BASE, iomem);
 
-    // // init 8900 OPS
-    // allocate_ram(sysmem, "8900ops", LLB_BASE, 0x1000);
-
-    // // patch the instructions related to 8900 decryption
-    uint32_t *data = malloc(sizeof(uint32_t) * 2);
-    // data[0] = 0xe3b00001; // MOVS R0, #1
-    // data[1] = 0xe12fff1e; // BX LR
-    // address_space_rw(nsas, LLB_BASE + 0x80, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 2, 1);
-
-    /*
-    load the decryption logic in memory. These bytes correspond to the following ARMv6 instructions:
-
-        LDR r1,[pc,#0x100]
-        STR r0,[r1]
-        MOVS R0, #1
-        BX lr
-    */
-    data = malloc(sizeof(uint32_t) * 4);
-    data[0] = 0xE59F1100; // LDR r1,[pc,#0x100]
-    data[1] = 0xE5810000; // STR r0,[r1]
-    data[2] = 0xE3B00001; // MOVS R0, #1
-    data[3] = 0xE12FFF1E; // BX lr
-    // address_space_rw(nsas, LLB_BASE + 0x100, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, sizeof(uint32_t) * 4, 1);
+    // TODO: unknown peripheral at 0x38500000
+    allocate_ram(sysmem, "ipod.unknown", 0x38500000, 0x2000);
 
     // contains some constants
-    data = malloc(4);
-    data[0] = ENGINE_8900_MEM_BASE; // engine base address
-    address_space_rw(nsas, LLB_BASE + 0x208, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
+    // data = malloc(4);
+    // data[0] = ENGINE_8900_MEM_BASE; // engine base address
+    // address_space_rw(nsas, LLB_BASE + 0x208, MEMTXATTRS_UNSPECIFIED, (uint8_t *)data, 4, 1);
 
     // init two pl080 DMAC0 devices
     dev = qdev_new("pl080");
