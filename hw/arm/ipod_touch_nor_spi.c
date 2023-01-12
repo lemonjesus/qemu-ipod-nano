@@ -57,7 +57,7 @@ static uint32_t ipod_touch_nor_spi_transfer(SSIPeripheral *dev, uint32_t value)
         } else if(s->cur_cmd == NOR_READ_DATA_CMD && s->in_buf_cur_ind == s->in_buf_size) {
             if(!s->nor_initialized) { initialize_nor(s); }
             s->nor_read_ind = (s->in_buf[1] << 16) | (s->in_buf[2] << 8) | s->in_buf[3];
-            printf("Read index: %d\n", s->nor_read_ind);
+            printf("Reading from NOR @ 0x%08X\n", s->nor_read_ind);
         }
 
         return 0x0;

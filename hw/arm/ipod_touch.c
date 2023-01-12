@@ -188,6 +188,15 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     uint8_t *file_data = NULL;
     unsigned long fsize;
     if (g_file_get_contents(nms->bootrom_path, (char **)&file_data, &fsize, NULL)) {
+        // PATCHES
+        // 1. do not verify the image header, just assume it's good to go (immediately return 1 from verify_img_header)
+        ((uint32_t*)file_data)[0x5dc/4] = 0xE3A00001;
+        ((uint32_t*)file_data)[0x5e0/4] = 0xE12FFF1E;
+        
+        // 2. do the same for verify_decrypt_image (it's already decrypted off of NOR)
+        ((uint32_t*)file_data)[0x6dc/4] = 0xE3A00001;
+        ((uint32_t*)file_data)[0x6e0/4] = 0xE12FFF1E;
+
         allocate_ram(sysmem, "vrom", 0, 0x10000);
         address_space_rw(nsas, 0, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
 

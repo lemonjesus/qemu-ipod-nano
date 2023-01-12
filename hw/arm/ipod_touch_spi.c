@@ -85,14 +85,14 @@ static void apple_spi_run(S5L8900SPIState *s)
     uint32_t tx;
     uint32_t rx;
 
-    fprintf(stderr, "apple_spi_run\n");
+    // fprintf(stderr, "apple_spi_run\n");
 
     if (!(REG(s, R_CTRL) & R_CTRL_RUN)) {
-        fprintf(stderr, "apple_spi_run: not running: R_CTRL\n");
+        // fprintf(stderr, "apple_spi_run: not running: R_CTRL\n");
         return;
     }
     if (REG(s, R_RXCNT) == 0 && REG(s, R_TXCNT) == 0) {
-        fprintf(stderr, "apple_spi_run: not running: R_RXCNT\n");
+        // fprintf(stderr, "apple_spi_run: not running: R_RXCNT\n");
         return;
     }
 
