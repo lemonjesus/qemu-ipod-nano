@@ -11,6 +11,7 @@
 #include "hw/ssi/ssi.h"
 #include "hw/arm/ipod_touch_lcd_panel.h"
 #include "hw/arm/ipod_touch_multitouch.h"
+#include "hw/arm/ipod_touch_nor_spi.h"
 
 #define TYPE_S5L8900SPI "s5l8900spi"
 OBJECT_DECLARE_SIMPLE_TYPE(S5L8900SPIState, S5L8900SPI)
@@ -80,7 +81,7 @@ typedef struct S5L8900SPIState {
     uint32_t mmio_size;
     uint8_t base;
 
-    DriveInfo *nor_drive;
+    IPodTouchNORSPIState *nor;
 } S5L8900SPIState;
 
 void set_spi_base(uint32_t base);

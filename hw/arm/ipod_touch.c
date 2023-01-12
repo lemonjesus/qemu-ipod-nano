@@ -228,16 +228,16 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
 
     // setup 1MB NOR
-    nms->nor_drive = drive_get(IF_PFLASH, 0, 0);
-    if (!nms->nor_drive) {
-        printf("A NOR image must be given with the -pflash parameter\n");
-        abort();
-    }
+    // nms->nor_drive = drive_get(IF_PFLASH, 0, 0);
+    // if (!nms->nor_drive) {
+    //     printf("A NOR image must be given with the -pflash parameter\n");
+    //     abort();
+    // }
 
-    if(!pflash_cfi02_register(NOR_MEM_BASE, "nor", 1024 * 1024, nms->nor_drive ? blk_by_legacy_dinfo(nms->nor_drive) : NULL, 4096, 1, 2, 0x00bf, 0x273f, 0x0, 0x0, 0x555, 0x2aa, 0)) {
-        printf("Error registering NOR flash!\n");
-        abort();
-    }
+    // if(!pflash_cfi02_register(NOR_MEM_BASE, "nor", 1024 * 1024, nms->nor_drive ? blk_by_legacy_dinfo(nms->nor_drive) : NULL, 4096, 1, 2, 0x00bf, 0x273f, 0x0, 0x0, 0x555, 0x2aa, 0)) {
+    //     printf("Error registering NOR flash!\n");
+    //     abort();
+    // }
 }
 
 static char *ipod_touch_get_bootrom_path(Object *obj, Error **errp)
@@ -276,6 +276,18 @@ static void ipod_touch_set_nand_path(Object *obj, const char *value, Error **err
     g_strlcpy(nms->nand_path, value, sizeof(nms->nand_path));
 }
 
+static char *ipod_touch_get_nor_path(Object *obj, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    return g_strdup(nms->nor_path);
+}
+
+static void ipod_touch_set_nor_path(Object *obj, const char *value, Error **errp)
+{
+    IPodTouchMachineState *nms = IPOD_TOUCH_MACHINE(obj);
+    g_strlcpy(nms->nor_path, value, sizeof(nms->nor_path));
+}
+
 static void ipod_touch_instance_init(Object *obj)
 {
 	object_property_add_str(obj, "bootrom", ipod_touch_get_bootrom_path, ipod_touch_set_bootrom_path);
@@ -286,6 +298,9 @@ static void ipod_touch_instance_init(Object *obj)
 
     object_property_add_str(obj, "nand", ipod_touch_get_nand_path, ipod_touch_set_nand_path);
     object_property_set_description(obj, "nand", "Path to the NAND files");
+
+    object_property_add_str(obj, "nor", ipod_touch_get_nor_path, ipod_touch_set_nor_path);
+    object_property_set_description(obj, "nor", "Path to the iPod Nano 3G NOR image");
 }
 
 static inline qemu_irq s5l8900_get_irq(IPodTouchMachineState *s, int n)
@@ -460,7 +475,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     set_spi_base(0);
     dev = sysbus_create_simple("s5l8900spi", SPI0_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI0_IRQ));
     S5L8900SPIState *spi0_state = S5L8900SPI(dev);
-    spi0_state->nor_drive = nms->nor_drive;
+    strcpy(spi0_state->nor->nor_path, nms->nor_path);
 
     set_spi_base(1);
     sysbus_create_simple("s5l8900spi", SPI1_MEM_BASE, s5l8900_get_irq(nms, S5L8900_SPI1_IRQ));

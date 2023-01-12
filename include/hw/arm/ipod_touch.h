@@ -170,7 +170,7 @@ typedef struct {
 	char bootrom_path[1024];
 	char iboot_path[1024];
 	char nand_path[1024];
-	DriveInfo* nor_drive;
+	char nor_path[1024];
 } IPodTouchMachineState;
 
 #endif

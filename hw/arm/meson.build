@@ -58,6 +58,6 @@ arm_ss.add(when: 'CONFIG_FSL_IMX7', if_true: files('fsl-imx7.c', 'mcimx7d-sabre.
 arm_ss.add(when: 'CONFIG_ARM_SMMUV3', if_true: files('smmu-common.c', 'smmuv3.c'))
 arm_ss.add(when: 'CONFIG_FSL_IMX6UL', if_true: files('fsl-imx6ul.c', 'mcimx6ul-evk.c'))
 arm_ss.add(when: 'CONFIG_NRF51_SOC', if_true: files('nrf51_soc.c'))
-arm_ss.add(when: 'CONFIG_IPOD_TOUCH', if_true: files('ipod_touch.c', 'ipod_touch_spi.c', 'ipod_touch_sysic.c', 'ipod_touch_aes.c', 'ipod_touch_sha1.c', 'ipod_touch_usb_otg.c', 'ipod_touch_8900_engine.c', 'ipod_touch_nand.c', 'ipod_touch_nand_ecc.c', 'ipod_touch_pcf50633_pmu.c', 'ipod_touch_adm.c', 'ipod_touch_chipid.c', 'ipod_touch_tvout.c', 'ipod_touch_lcd_panel.c', 'ipod_touch_multitouch.c', 'ipod_touch_lcd.c', 'ipod_touch_lis302dl.c', 'ipod_touch_aes.c', 'ipod_touch_sha1.c', 'ipod_touch_timer.c', 'ipod_touch_clock.c', 'ipod_touch_gpio.c', 'ipod_touch_sdio.c'))
+arm_ss.add(when: 'CONFIG_IPOD_TOUCH', if_true: files('ipod_touch.c', 'ipod_touch_spi.c', 'ipod_touch_sysic.c', 'ipod_touch_aes.c', 'ipod_touch_sha1.c', 'ipod_touch_usb_otg.c', 'ipod_touch_8900_engine.c', 'ipod_touch_nand.c', 'ipod_touch_nand_ecc.c', 'ipod_touch_pcf50633_pmu.c', 'ipod_touch_adm.c', 'ipod_touch_chipid.c', 'ipod_touch_tvout.c', 'ipod_touch_lcd_panel.c', 'ipod_touch_multitouch.c', 'ipod_touch_lcd.c', 'ipod_touch_lis302dl.c', 'ipod_touch_aes.c', 'ipod_touch_sha1.c', 'ipod_touch_timer.c', 'ipod_touch_clock.c', 'ipod_touch_gpio.c', 'ipod_touch_sdio.c', 'ipod_touch_nor_spi.c'))
 
 hw_arch += {'arm': arm_ss}

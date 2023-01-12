@@ -88,13 +88,20 @@ static void apple_spi_run(S5L8900SPIState *s)
     fprintf(stderr, "apple_spi_run\n");
 
     if (!(REG(s, R_CTRL) & R_CTRL_RUN)) {
-        fprintf(stderr, "apple_spi_run: not running\n");
-        // return;
+        fprintf(stderr, "apple_spi_run: not running: R_CTRL\n");
+        return;
     }
+    if (REG(s, R_RXCNT) == 0 && REG(s, R_TXCNT) == 0) {
+        fprintf(stderr, "apple_spi_run: not running: R_RXCNT\n");
+        return;
+    }
+
+    apple_spi_update_xfer_tx(s);
 
     while (!fifo8_is_empty(&s->tx_fifo)) {
         tx = (uint32_t)fifo8_pop(&s->tx_fifo);
         rx = ssi_transfer(s->spi, tx);
+        // REG(s, R_TXCNT)--;
         apple_spi_update_xfer_tx(s);
         if (REG(s, R_RXCNT) > 0) {
             if (fifo8_is_full(&s->rx_fifo)) {
@@ -121,49 +128,48 @@ static void apple_spi_run(S5L8900SPIState *s)
             apple_spi_update_xfer_rx(s);
         }
     }
-    if (REG(s, R_RXCNT) == 0 && fifo8_is_empty(&s->tx_fifo)) {
+    if (REG(s, R_RXCNT) == 0 && REG(s, R_TXCNT) == 0) {
         REG(s, R_STATUS) |= R_STATUS_COMPLETE;
-        REG(s, R_CTRL) &= ~R_CTRL_RUN;
     }
 }
 
 static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
+    // fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
 
     uint32_t r;
     bool run = false;
 
     r = s->regs[addr >> 2];
     switch (addr) {
-    case R_RXDATA: {
-        const uint8_t *buf = NULL;
-        int word_size = apple_spi_word_size(s);
-        uint32_t num = 0;
-        if (fifo8_is_empty(&s->rx_fifo)) {
-            qemu_log_mask(LOG_GUEST_ERROR, "%s: rx underflow\n", __func__);
-            r = 0;
+        case R_RXDATA: {
+            const uint8_t *buf = NULL;
+            int word_size = apple_spi_word_size(s);
+            uint32_t num = 0;
+            if (fifo8_is_empty(&s->rx_fifo)) {
+                qemu_log_mask(LOG_GUEST_ERROR, "%s: rx underflow\n", __func__);
+                r = 0;
+                break;
+            }
+            buf = fifo8_pop_buf(&s->rx_fifo, word_size, &num);
+            memcpy(&r, buf, num);
+
+            if (fifo8_is_empty(&s->rx_fifo)) {
+                run = true;
+            }
             break;
         }
-        buf = fifo8_pop_buf(&s->rx_fifo, word_size, &num);
-        memcpy(&r, buf, num);
-        if (fifo8_is_empty(&s->rx_fifo)) {
-            run = true;
+        case R_STATUS: {
+            int val = 0;
+            val |= (fifo8_num_used(&s->tx_fifo) << R_STATUS_TXFIFO_SHIFT);
+            val |= (fifo8_num_used(&s->rx_fifo) << R_STATUS_RXFIFO_SHIFT);
+            r |= val;
+            r = 0x3e00;
+            break;
         }
-        break;
-    }
-    case R_STATUS: {
-        int val = 0;
-        val |= fifo8_num_used(&s->tx_fifo) << R_STATUS_TXFIFO_SHIFT;
-        val |= fifo8_num_used(&s->rx_fifo) << R_STATUS_RXFIFO_SHIFT;
-        val &= (R_STATUS_TXFIFO_MASK | R_STATUS_RXFIFO_MASK);
-        r &= ~(R_STATUS_TXFIFO_MASK | R_STATUS_RXFIFO_MASK);
-        r |= val;
-        break;
-    }
-    default:
-        break;
+        default:
+            break;
     }
 
     if (run) {
@@ -176,7 +182,7 @@ static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
+    // fprintf(stderr, "%s (base %d): writing 0x%08x to 0x%08x\n", __func__, s->base, data, addr);
 
     uint32_t r = data;
     uint32_t *mmio = &REG(s, addr);
@@ -198,21 +204,20 @@ static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned
         break;
     case R_STATUS:
         r = old & (~r);
-        run = true;
         break;
     case R_PIN:
         cs_flg = true;
         break;
     case R_TXDATA ... R_TXDATA + 3: {
         int word_size = apple_spi_word_size(s);
-        if ((fifo8_is_full(&s->tx_fifo))
-            || (fifo8_num_free(&s->tx_fifo) < word_size)) {
-            hw_error("OVERFLOW: %d\n", fifo8_num_free(&s->tx_fifo));
+        if ((fifo8_is_full(&s->tx_fifo)) || (fifo8_num_free(&s->tx_fifo) < word_size)) {
             qemu_log_mask(LOG_GUEST_ERROR, "%s: tx overflow\n", __func__);
             r = 0;
             break;
         }
         fifo8_push_all(&s->tx_fifo, (uint8_t *)&r, word_size);
+        if(REG(s, R_CTRL) & R_CTRL_RUN) run = true;
+        REG(s, R_STATUS) = 0x3e00;
         break;
     case R_CFG:
         run = true;
@@ -229,6 +234,12 @@ static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned
     if (run) {
         apple_spi_run(s);
     }
+
+    if(addr == R_STATUS) {
+        apple_spi_update_xfer_tx(s);
+        apple_spi_update_xfer_rx(s);
+    }
+
     apple_spi_update_irq(s);
 }
 
@@ -277,9 +288,9 @@ static void s5l8900_spi_realize(DeviceState *dev, struct Error **errp)
     // create the peripheral
     switch(s->base) {
         case 0:
-            BlockBackend* blk = s->nor_drive ? blk_by_legacy_dinfo(s->nor_drive) : NULL;
-            qdev_prop_set_drive_err(s->spi, "drive", blk, NULL);
-            dev = ssi_create_peripheral(s->spi, "sst25vf080b");
+            dev = ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_NOR_SPI);
+            IPodTouchNORSPIState *nor = IPOD_TOUCH_NOR_SPI(dev);
+            s->nor = nor;
             break;
         case 1:
             ssi_create_peripheral(s->spi, TYPE_IPOD_TOUCH_LCD_PANEL);
