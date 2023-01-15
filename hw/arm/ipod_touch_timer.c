@@ -77,7 +77,7 @@ static void s5l8900_timer1_write(void *opaque, hwaddr addr, uint64_t value, unsi
 
 static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
 {
-    fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+    // fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
     IPodTouchTimerState *s = (struct IPodTouchTimerState *) opaque;
     uint64_t elapsed_ns, ticks;
 
@@ -86,7 +86,7 @@ static uint64_t s5l8900_timer1_read(void *opaque, hwaddr addr, unsigned size)
 
             elapsed_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) / 2; // the timer ticks twice as slow as the CPU frequency in the kernel
             ticks = clock_ns_to_ticks(s->sysclk, elapsed_ns);
-            printf("TICKS: %lld\n", ticks);
+            // printf("TICKS: %lld\n", ticks);
             s->ticks_high = (ticks >> 32);
             s->ticks_low = (ticks & 0xFFFFFFFF);
             return s->ticks_low;

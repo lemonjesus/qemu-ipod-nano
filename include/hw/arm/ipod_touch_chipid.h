@@ -8,7 +8,7 @@
 #define TYPE_IPOD_TOUCH_CHIPID "ipodtouch.chipid"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchChipIDState, IPOD_TOUCH_CHIPID)
 
-#define CHIP_REVISION 0x2
+#define CHIP_REVISION 0x0
 
 typedef struct IPodTouchChipIDState {
     SysBusDevice busdev;

@@ -13,7 +13,7 @@ static uint32_t ipod_touch_nor_spi_transfer(SSIPeripheral *dev, uint32_t value)
 {
     IPodTouchNORSPIState *s = IPOD_TOUCH_NOR_SPI(dev);
 
-    printf("NOR SPI received value 0x%08x\n", value);
+    if(value != 0xFF) printf("NOR SPI received value 0x%08x\n", value);
 
     if(s->cur_cmd == NOR_READ_DATA_CMD && s->in_buf_cur_ind == s->in_buf_size && value != 0xFF) {
         // if we are currently reading from the NOR data and we receive a value that's not the sentinel, reset the current command.
@@ -30,17 +30,31 @@ static uint32_t ipod_touch_nor_spi_transfer(SSIPeripheral *dev, uint32_t value)
         s->in_buf_cur_ind = 1;
         s->out_buf_cur_ind = 0;
 
-        if(value == NOR_GET_STATUS_CMD) {
-            s->in_buf_size = 1;
-            s->out_buf_size = 1;
-        } else if(value == NOR_READ_DATA_CMD) {
-            s->in_buf_size = 4;
-            s->out_buf_size = 4096;
-        } else if(value == NOR_RESET_CMD) {
-            s->in_buf_size = 1;
-            s->out_buf_size = 1;
-        } else {
-            hw_error("Unknown command 0x%02x!", value);
+        switch(value) {
+            case 0x00:
+                break;
+            case NOR_GET_STATUS_CMD:
+                s->in_buf_size = 1;
+                s->out_buf_size = 1;
+                break;
+            case NOR_READ_DATA_CMD:
+                s->in_buf_size = 4;
+                s->out_buf_size = 4096;
+                break;
+            case NOR_RESET_CMD:
+                s->in_buf_size = 1;
+                s->out_buf_size = 1;
+                break;
+            case NOR_ENABLE_STATUS_WRITE_CMD:
+                s->in_buf_size = 1;
+                s->out_buf_size = 1;
+                break;
+            case NOR_WRITE_STATUS_CMD:
+                s->in_buf_size = 3;
+                s->out_buf_size = 1;
+                break;
+            default:
+                hw_error("Unknown command 0x%02x!", value);
         }
 
         return 0x0;

@@ -91,10 +91,6 @@ static void apple_spi_run(S5L8900SPIState *s)
         // fprintf(stderr, "apple_spi_run: not running: R_CTRL\n");
         return;
     }
-    if (REG(s, R_RXCNT) == 0 && REG(s, R_TXCNT) == 0) {
-        // fprintf(stderr, "apple_spi_run: not running: R_RXCNT\n");
-        return;
-    }
 
     apple_spi_update_xfer_tx(s);
 
@@ -136,13 +132,18 @@ static void apple_spi_run(S5L8900SPIState *s)
 static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
 {
     S5L8900SPIState *s = S5L8900SPI(opaque);
-    // fprintf(stderr, "%s (base %d): read from location 0x%08x\n", __func__, s->base, addr);
 
     uint32_t r;
     bool run = false;
 
     r = s->regs[addr >> 2];
     switch (addr) {
+        case R_CTRL: {
+            if(REG(s, R_CTRL) == 0) {
+                r = 0x00000002;
+            }
+            break;
+        }
         case R_RXDATA: {
             const uint8_t *buf = NULL;
             int word_size = apple_spi_word_size(s);
@@ -165,12 +166,21 @@ static uint64_t s5l8900_spi_read(void *opaque, hwaddr addr, unsigned size)
             val |= (fifo8_num_used(&s->tx_fifo) << R_STATUS_TXFIFO_SHIFT);
             val |= (fifo8_num_used(&s->rx_fifo) << R_STATUS_RXFIFO_SHIFT);
             r |= val;
+            // fprintf(stderr, "val is %d, r is %d, R_CTRL is %d, R_STATUS is %d, R_RXCNT is %d, R_TXCNT is %d, R_CFG is %d, R_PIN is %d, R_TXDATA is %d, R_RXDATA is %d\n", val, r, REG(s, R_CTRL), REG(s, R_STATUS), REG(s, R_RXCNT), REG(s, R_TXCNT), REG(s, R_CFG), REG(s, R_PIN), REG(s, R_TXDATA), REG(s, R_RXDATA));
             r = 0x3e00;
+            if(REG(s, R_CTRL) & 0xC) {
+                 if(REG(s, R_TXDATA) == 0xFF && val > 0) r = 0xFF0; // the nor was probably just reset
+                 else if(REG(s, R_TXDATA) == 0xFF && r != REG(s, R_STATUS)) r = 0x0;
+                 else if(REG(s, R_TXDATA) == 0xFF && val == 0 && REG(s, R_RXCNT) == 0) r = 0xF0;
+                 else r = 0;
+            }
             break;
         }
         default:
             break;
     }
+
+    // fprintf(stderr, "%s (base %d): read from location 0x%08x -> 0x%08X\n", __func__, s->base, addr, r);
 
     if (run) {
         apple_spi_run(s);
@@ -201,6 +211,12 @@ static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned
         if (r & R_CTRL_RUN && !fifo8_is_empty(&s->tx_fifo)) {
             run = true;
         }
+        if(r & 0xC) {
+            REG(s, R_STATUS) |= 0xF0;
+        }
+        if (r == 0) {
+            REG(s, R_CTRL) = 2;
+        }
         break;
     case R_STATUS:
         r = old & (~r);
@@ -217,7 +233,6 @@ static void s5l8900_spi_write(void *opaque, hwaddr addr, uint64_t data, unsigned
         }
         fifo8_push_all(&s->tx_fifo, (uint8_t *)&r, word_size);
         if(REG(s, R_CTRL) & R_CTRL_RUN) run = true;
-        REG(s, R_STATUS) = 0x3e00;
         break;
     case R_CFG:
         run = true;

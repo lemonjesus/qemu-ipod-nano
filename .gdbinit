@@ -15,6 +15,23 @@ layout vmdebug
 focus cmd
 set confirm off
 
-# first instruction of a module! maps to 40080242 efi_DxeMain_entrypoint in Ghidra
-break *0x9fbf242
+define sf
+  break *($pc + 6)
+  continue
+end
+
+define dump
+  x/32bx $pc
+end
+
+# break on a CPU exception
+break *0x10
+break *0x9f022c0
+
+# first instruction of a module! maps to 40080242 efi_DxeMain_entrypoint in Ghidra, offset of 0x360C1000
+# break *0x9fbf242
+
+# testing where the ARM exception is...
+# break *0x09ef12fa
+break *0x9ef5362
 continue
