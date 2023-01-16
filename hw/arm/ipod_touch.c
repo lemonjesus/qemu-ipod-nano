@@ -595,8 +595,8 @@ static void ipod_touch_machine_init(MachineState *machine)
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_I2C0_IRQ));
     memory_region_add_subregion(sysmem, I2C0_MEM_BASE, &i2c_state->iomem);
 
-    // init the accelerometer
-    I2CSlave *accelerometer = i2c_slave_create_simple(i2c_state->bus, "lis302dl", 0x1D);
+    // init the PMU
+    I2CSlave *pmu = i2c_slave_create_simple(i2c_state->bus, "pcf50633", 0xe6);
 
     dev = qdev_new("ipodtouch.i2c");
     i2c_state = IPOD_TOUCH_I2C(dev);
@@ -604,9 +604,6 @@ static void ipod_touch_machine_init(MachineState *machine)
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_I2C1_IRQ));
     memory_region_add_subregion(sysmem, I2C1_MEM_BASE, &i2c_state->iomem);
-
-    // init the PMU
-    I2CSlave *pmu = i2c_slave_create_simple(i2c_state->bus, "pcf50633", 0x73);
 
     // init the ADM
     dev = qdev_new("ipodtouch.adm");

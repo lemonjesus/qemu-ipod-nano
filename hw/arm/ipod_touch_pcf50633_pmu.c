@@ -1,7 +1,6 @@
 #include "hw/arm/ipod_touch_pcf50633_pmu.h"
 
-static int pcf50633_event(I2CSlave *i2c, enum i2c_event event)
-{
+static int pcf50633_event(I2CSlave *i2c, enum i2c_event event) {
     return 0;
 }
 
@@ -15,8 +14,7 @@ static int int_to_bcd(int value) {
    return res;
 }
 
-static uint8_t pcf50633_recv(I2CSlave *i2c)
-{
+static uint8_t pcf50633_recv(I2CSlave *i2c) {
     Pcf50633State *s = PCF50633(i2c);
     printf("Reading PMU register %d\n", s->cmd);
 
@@ -67,20 +65,16 @@ static uint8_t pcf50633_recv(I2CSlave *i2c)
     return res;
 }
 
-static int pcf50633_send(I2CSlave *i2c, uint8_t data)
-{
+static int pcf50633_send(I2CSlave *i2c, uint8_t data) {
+    printf("PMU pcf50633_send: %x\n", data);
     Pcf50633State *s = PCF50633(i2c);
     s->cmd = data;
     return 0;
 }
 
-static void pcf50633_init(Object *obj)
-{
+static void pcf50633_init(Object *obj) {}
 
-}
-
-static void pcf50633_class_init(ObjectClass *klass, void *data)
-{
+static void pcf50633_class_init(ObjectClass *klass, void *data) {
     I2CSlaveClass *k = I2C_SLAVE_CLASS(klass);
 
     k->event = pcf50633_event;
@@ -96,8 +90,7 @@ static const TypeInfo pcf50633_info = {
     .class_init    = pcf50633_class_init,
 };
 
-static void pcf50633_register_types(void)
-{
+static void pcf50633_register_types(void) {
     type_register_static(&pcf50633_info);
 }
 

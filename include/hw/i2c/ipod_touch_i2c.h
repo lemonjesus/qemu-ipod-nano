@@ -17,6 +17,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodTouchI2CState, IPOD_TOUCH_I2C)
 #define I2CDS         0x0c      /* I2C Data Shift register */
 #define I2CLC         0x10      /* I2C Line Control register */
 
+#define IICUNK14      0x14
+#define IICUNK18      0x18
 #define IICREG20	  0x20
 
 #define SR_MODE       0x0       /* Slave Receive Mode */
