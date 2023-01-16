@@ -3,143 +3,122 @@
 #include "ui/console.h"
 #include "hw/display/framebuffer.h"
 
-static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size)
-{
-    // fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+#define LCD_CONFIG (0x000)
+#define LCD_WCMD   (0x004)
+#define LCD_RCMD   (0x00c)
+#define LCD_RDATA  (0x010)
+#define LCD_DBUFF  (0x014)
+#define LCD_INTCON (0x018)
+#define LCD_STATUS (0x01c)
+#define LCD_PHTIME (0x020)
+#define LCD_WDATA  (0x040)
 
+static uint64_t s5l8900_lcd_read(void *opaque, hwaddr addr, unsigned size) {
     IPodTouchLCDState *s = (IPodTouchLCDState *)opaque;
+    uint64_t r = 0;
     switch(addr)
     {
-        case 0x4:
-            return s->lcd_con;
-        case 0x8:
-            return s->lcd_con2;
-
-        case 0x14:
-            return s->unknown1;
-        case 0x18:
-            return s->unknown2;
-
-        case 0x20:
-            return s->wnd_con;
-
-        case 0x200:
-            return s->vid_con0;
-        case 0x204:
-            return s->vid_con1;
-
-        case 0x20C:
-            return s->vidt_con0;
-        case 0x210:
-            return s->vidt_con1;
-        case 0x214:
-            return s->vidt_con2;
-        case 0x218:
-            return s->vidt_con3;
-
-        case 0x58:
-            return s->w1_hspan;
-        case 0x5c:
-            return s->w1_display_depth_info;
-        case 0x60:
-            return s->w1_framebuffer_base;
-        case 0x64:
-            return s->w1_display_resolution_info;
-        case 0x68:
-            return s->w1_qlen;
-
-        case 0x70:
-            return s->w2_hspan;
-        case 0x74:
-            return s->w2_display_depth_info;
-        case 0x78:
-            return s->w2_framebuffer_base;
-        case 0x7c:
-            return s->w2_display_resolution_info;
-        case 0x80:
-            return s->w2_qlen;
+        case LCD_CONFIG:
+            r = s->lcd_config;
+            break;
+        case LCD_WCMD:
+            r = s->lcd_wcmd;
+            break;
+        case LCD_RCMD:
+            r = s->lcd_rcmd;
+            break;
+        case LCD_RDATA:
+            r = s->lcd_rdata;
+            break;
+        case LCD_DBUFF:
+            r = s->lcd_dbuff;
+            break;
+        case LCD_INTCON:
+            r = s->lcd_intcon;
+            break;
+        case LCD_STATUS:
+            r = 0xFFFFFFEF;
+            break;
+        case LCD_PHTIME:
+            r = s->lcd_phtime;
+            break;
+        case LCD_WDATA:
+            r = s->lcd_wdata;
+            break;
         default:
-            // hw_error("%s: read invalid location 0x%08x.\n", __func__, addr);
+            hw_error("%s: read invalid location 0x%08x.\n", __func__, addr);
             break;
     }
-    return 0;
+    // fprintf(stderr, "LCD read  0x%08x <- 0x%08x\n", r, addr);
+    return r;
 }
 
 static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
     IPodTouchLCDState *s = (IPodTouchLCDState *)opaque;
-    // fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+    // fprintf(stderr, "LCD write 0x%08x -> 0x%08x\n", val, addr);
 
     switch(addr) {
-        case 0x4:
-            s->lcd_con = val;
+        case LCD_CONFIG:
+            s->lcd_config = val;
             break;
-        case 0x8:
-            s->lcd_con2 = val;
+        case LCD_WCMD:
+            s->lcd_wcmd = val;
+            printf("LCD Got Command 0x%08x\n", s->lcd_wcmd);
+            switch(s->lcd_wcmd) {
+                case 0x04:
+                    fifo8_reset(s->dbuff_buf);
+                    fifo8_push(s->dbuff_buf, 0x00);
+                    fifo8_push(s->dbuff_buf, 0x38);
+                    fifo8_push(s->dbuff_buf, 0xB3);
+                    fifo8_push(s->dbuff_buf, 0x71);
+                    break;
+                case 0x2c:
+                    s->memcnt = 0;
+                    break;
+                case 0x28:
+                    printf("DISPLAY OFF\n");
+                    break;
+                case 0x29:
+                    printf("DISPLAY ON\n");
+                    break;
+            }
             break;
-
-        case 0x14:
-            s->unknown1 = val;
+        case LCD_RCMD:
+            s->lcd_rcmd = val;
             break;
-        case 0x18:
-            s->unknown2 = val;
-            qemu_irq_lower(s->irq);
+        case LCD_RDATA:
+            s->lcd_rdata = val;
+            if(val == 0) {
+                if(fifo8_is_empty(s->dbuff_buf)) s->lcd_dbuff = 0;
+                else s->lcd_dbuff = fifo8_pop(s->dbuff_buf) << 1;
+            }
             break;
-
-        case 0x20:
-            s->wnd_con = val;
+        case LCD_DBUFF:
+            s->lcd_dbuff = val;
             break;
-
-        case 0x200:
-            s->vid_con0 = val;
+        case LCD_INTCON:
+            s->lcd_intcon = val;
             break;
-        case 0x204:
-            s->vid_con1 = val;
+        case LCD_STATUS:
+            s->lcd_status = val;
             break;
-
-        case 0x20C:
-            s->vidt_con0 = val;
+        case LCD_PHTIME:
+            s->lcd_phtime = val;
             break;
-        case 0x210:
-            s->vidt_con1 = val;
+        case LCD_WDATA:
+            s->lcd_wdata = val;
+            if(s->lcd_wcmd == 0x2c) {
+                address_space_rw(s->nsas, 0xfe00000 + s->memcnt++, MEMTXATTRS_UNSPECIFIED, &val, 2, 1);
+                // s->framebuffer[s->memcnt++] = (val & 0xFFFF);
+                s->invalidate = true;
+                // printf("memcnt: %d\n", s->memcnt);
+            }
+            else s->lcd_regs[s->lcd_wcmd] = s->lcd_regs[s->lcd_wcmd] << 8 | (val & 0xFF);
+            // fprintf(stderr, "LCD Register 0x%02x = 0x%016llx\n", s->lcd_wcmd, s->lcd_regs[s->lcd_wcmd]);
             break;
-        case 0x214:
-            s->vidt_con2 = val;
-            break;
-        case 0x218:
-            s->vidt_con3 = val;
-            break;
-
-        case 0x58:
-            s->w1_hspan = val;
-            break;
-        case 0x5c:
-            s->w1_display_depth_info = val;
-            break;
-        case 0x60:
-            s->w1_framebuffer_base = val;
-            break;
-        case 0x64:
-            s->w1_display_resolution_info = val;
-            break;
-        case 0x68:
-            s->w1_qlen = val;
-            break;
-
-        case 0x70:
-            s->w2_hspan = val;
-            break;
-        case 0x74:
-            s->w2_display_depth_info = val;
-            break;
-        case 0x78:
-            s->w2_framebuffer_base = val;
-            break;
-        case 0x7c:
-            s->w2_display_resolution_info = val;
-            break;
-        case 0x80:
-            s->w2_qlen = val;
+        default:
+            hw_error("%s: write invalid location 0x%08x.\n", __func__, addr);
             break;
     }
 }
@@ -160,9 +139,9 @@ static void draw_line32_32(void *opaque, uint8_t *d, const uint8_t *s, int width
         b = s[0];
         g = s[1];
         r = s[2];
-        //printf("R: %d, G: %d, B: %d\n", r, g, b);
+        if(r > 0 && r < 0xFF) printf("R: %d, G: %d, B: %d\n", r, g, b);
         ((uint32_t *) d)[0] = rgb_to_pixel32(r, g, b);
-        s += 4;
+        s += 2;
         d += 4;
     } while (-- width != 0);
 }
@@ -187,14 +166,14 @@ static void lcd_refresh(void *opaque)
     /* Resolution */
     first = last = 0;
     width = 320;
-    height = 480;
+    height = 240;
     lcd->invalidate = 1;
 
-    src_width =  4 * width;
+    src_width =  2 * width;
     linesize = surface_stride(surface);
 
     if(lcd->invalidate) {
-        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, lcd->w1_framebuffer_base, height, 4 * width);
+        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, 0xfe00000, height, src_width);
     }
 
     framebuffer_update_display(surface, &lcd->fbsection,
@@ -257,14 +236,24 @@ static void s5l8900_lcd_realize(DeviceState *dev, Error **errp)
 {
     IPodTouchLCDState *s = IPOD_TOUCH_LCD(dev);
     s->con = graphic_console_init(dev, 0, &s5l8900_gfx_ops, s);
-    qemu_console_resize(s->con, 320, 480);
+    qemu_console_resize(s->con, 320, 240);
 
     // add mouse handler
-    qemu_add_mouse_event_handler(ipod_touch_lcd_mouse_event, s, 1, "iPod Touch Touchscreen");
+    // qemu_add_mouse_event_handler(ipod_touch_lcd_mouse_event, s, 1, "iPod Touch Touchscreen");
 
     // initialize the refresh timer
     s->refresh_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, refresh_timer_tick, s);
     timer_mod(s->refresh_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + NANOSECONDS_PER_SECOND / LCD_REFRESH_RATE_FREQUENCY);
+
+    // initialize the dbuff buffer
+    s->dbuff_buf = g_malloc0(sizeof(Fifo8));
+    fifo8_create(s->dbuff_buf, 0x4);
+
+    // initialize the lcd's internal registers (they're all just uint64_t's)
+    s->lcd_regs = g_malloc0(sizeof(uint64_t) * 0xFF);
+
+    // initialize the lcd's internal framebuffer
+    s->framebuffer = g_malloc0(sizeof(uint16_t) * 320 * 240);
 }
 
 static void s5l8900_lcd_init(Object *obj)

@@ -270,7 +270,7 @@ static uint64_t synopsys_usb_read(void *opaque, hwaddr _addr, unsigned size)
 		return *((uint32_t*)(&state->fifos[_addr]));
 
 	default:
-		hw_error("USB: Unhandled read address 0x%08x!\n", _addr);
+		fprintf(stderr, "USB: Unhandled read address 0x%08x!\n", _addr);
 	}
 
 	return 0;

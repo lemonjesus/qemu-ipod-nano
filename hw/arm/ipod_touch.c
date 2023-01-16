@@ -220,7 +220,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     // // load LLB
     // file_data = NULL;
     // if (g_file_get_contents("/Users/martijndevos/Documents/ipod_touch_emulation/LLB.n45ap.RELEASE", (char **)&file_data, &fsize, NULL)) {
-        allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(0x400000));
+    allocate_ram(sysmem, "llb", LLB_BASE, align_64k_high(0x400000));
         // address_space_rw(nsas, LLB_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)file_data, fsize, 1);
     //  }
 
@@ -235,6 +235,8 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "h264bpd", H264BPD_MEM_BASE, 4096);
 
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
+    uint8_t stuff[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    address_space_rw(nsas, FRAMEBUFFER_MEM_BASE, MEMTXATTRS_UNSPECIFIED, (uint8_t *)stuff, 16, 1);
 
     // setup 1MB NOR
     // nms->nor_drive = drive_get(IF_PFLASH, 0, 0);
@@ -502,6 +504,7 @@ static void ipod_touch_machine_init(MachineState *machine)
     dev = qdev_new("ipodtouch.lcd");
     IPodTouchLCDState *lcd_state = IPOD_TOUCH_LCD(dev);
     lcd_state->sysmem = sysmem;
+    lcd_state->nsas = nsas;
     lcd_state->mt = spi2_state->mt;
     nms->lcd_state = lcd_state;
     busdev = SYS_BUS_DEVICE(dev);

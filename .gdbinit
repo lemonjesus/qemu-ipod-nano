@@ -31,7 +31,6 @@ break *0x9f022c0
 # first instruction of a module! maps to 40080242 efi_DxeMain_entrypoint in Ghidra, offset of 0x360C1000
 # break *0x9fbf242
 
-# testing where the ARM exception is...
-# break *0x09ef12fa
-break *0x9ef5362
+# break *0x9ede2da
+# watch *0x9ff7e04
 continue
