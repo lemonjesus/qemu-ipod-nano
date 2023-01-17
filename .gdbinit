@@ -31,5 +31,6 @@ break *0x9f022c0
 # first instruction of a module! maps to 40080242 efi_DxeMain_entrypoint in Ghidra, offset of 0x360C1000
 # break *0x9fbf242
 
-break *0x9ed624e
+ break *0x9ee5280
+#rwatch *0x89ecf020
 continue

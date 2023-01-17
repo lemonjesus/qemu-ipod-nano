@@ -13,7 +13,7 @@ static uint32_t ipod_touch_nor_spi_transfer(SSIPeripheral *dev, uint32_t value)
 {
     IPodTouchNORSPIState *s = IPOD_TOUCH_NOR_SPI(dev);
 
-    if(value != 0xFF) printf("NOR SPI received value 0x%08x\n", value);
+    // if(value != 0xFF) printf("NOR SPI received value 0x%08x\n", value);
 
     if(s->cur_cmd == NOR_READ_DATA_CMD && s->in_buf_cur_ind == s->in_buf_size && value != 0xFF) {
         // if we are currently reading from the NOR data and we receive a value that's not the sentinel, reset the current command.

@@ -28,12 +28,12 @@ static void s5l8900_aes_write(void *opaque, hwaddr offset, uint64_t value, unsig
     switch(offset) {
         case AES_GO:
             inbuf = (uint8_t *)malloc(aesop->insize);
-            cpu_physical_memory_read((aesop->inaddr - 0x80000000), inbuf, aesop->insize);
+            cpu_physical_memory_read((aesop->inaddr), inbuf, aesop->insize);
 
             switch(aesop->keytype) {
                     case AESGID:    
                         fprintf(stderr, "%s: No support for GID key\n", __func__);
-                        return;         
+                        break;         
                     case AESUID:
                         AES_set_decrypt_key(key_uid, sizeof(key_uid) * 8, &aesop->decryptKey);
                         break;
@@ -44,9 +44,11 @@ static void s5l8900_aes_write(void *opaque, hwaddr offset, uint64_t value, unsig
 
             buf = (uint8_t *) malloc(aesop->insize);
 
-            AES_cbc_encrypt(inbuf, buf, aesop->insize, &aesop->decryptKey, (uint8_t *)aesop->ivec, aesop->operation);
+            if(aesop->keytype != 0x01) AES_cbc_encrypt(inbuf, buf, aesop->insize, &aesop->decryptKey, (uint8_t *)aesop->ivec, aesop->operation);
 
-            cpu_physical_memory_write((aesop->outaddr - 0x80000000), buf, aesop->insize);
+            printf("AES: %s %d bytes from 0x%08x to 0x%08x\n", aesop->operation == AES_DECRYPT ? "decrypted" : "encrypted", aesop->insize, aesop->inaddr, aesop->outaddr);
+
+            cpu_physical_memory_write((aesop->outaddr), buf, aesop->insize);
             memset(aesop->custkey, 0, 0x20);
             memset(aesop->ivec, 0, 0x10);
             free(inbuf);

@@ -64,7 +64,7 @@ static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
             break;
         case LCD_WCMD:
             s->lcd_wcmd = val;
-            printf("LCD Got Command 0x%08x\n", s->lcd_wcmd);
+            if(val < 0x2A || val > 0x2C) printf("LCD Got Command 0x%08x\n", s->lcd_wcmd);
             switch(s->lcd_wcmd) {
                 case 0x04:
                     fifo8_reset(s->dbuff_buf);
@@ -108,14 +108,27 @@ static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
             break;
         case LCD_WDATA:
             s->lcd_wdata = val;
-            if(s->lcd_wcmd == 0x2c) {
-                address_space_rw(s->nsas, 0xfe00000 + s->memcnt++, MEMTXATTRS_UNSPECIFIED, &val, 2, 1);
-                // s->framebuffer[s->memcnt++] = (val & 0xFFFF);
+            switch(s->lcd_wcmd) {
+            case 0x2A:
+                printf("LCD GOT 0x2A: %04x\n", val);
+                break;
+            case 0x2B:
+                printf("LCD GOT 0x2B: %04x\n", val);
+                break;
+            case 0x2C:
+                address_space_rw(s->nsas, 0xfe00000 + s->memcnt, MEMTXATTRS_UNSPECIFIED, &val, 2, 1);
                 s->invalidate = true;
-                // printf("memcnt: %d\n", s->memcnt);
+                // printf("FB writing %04x to %08x\n", val, s->memcnt);
+                s->memcnt += 2;
+                break;
+            case 0x3A:
+                printf("LCD GOT 0x3A: %04x\n", val);
+                break;
+            default:
+                s->lcd_regs[s->lcd_wcmd] = s->lcd_regs[s->lcd_wcmd] << 8 | (val & 0xFF);
+                // fprintf(stderr, "LCD Register 0x%02x = 0x%016llx\n", s->lcd_wcmd, s->lcd_regs[s->lcd_wcmd]);
+                break;
             }
-            else s->lcd_regs[s->lcd_wcmd] = s->lcd_regs[s->lcd_wcmd] << 8 | (val & 0xFF);
-            // fprintf(stderr, "LCD Register 0x%02x = 0x%016llx\n", s->lcd_wcmd, s->lcd_regs[s->lcd_wcmd]);
             break;
         default:
             hw_error("%s: write invalid location 0x%08x.\n", __func__, addr);
@@ -136,10 +149,12 @@ static void draw_line32_32(void *opaque, uint8_t *d, const uint8_t *s, int width
     do {
         //v = lduw_le_p((void *) s);
         //printf("V: %d\n", *s);
-        b = s[0];
-        g = s[1];
-        r = s[2];
-        if(r > 0 && r < 0xFF) printf("R: %d, G: %d, B: %d\n", r, g, b);
+        // convert 5-6-5 to 8-8-8
+        uint16_t v = ((uint16_t *) s)[0];
+        r = (uint8_t)(((v & 0xF800) >> 11) << 3);
+        g = (uint8_t)(((v & 0x7E0) >> 5) << 2);
+        b = (uint8_t)(((v & 0x1F)) << 3);
+        // if(r > 0 && r < 0xFF) printf("R: %d, G: %d, B: %d\n", r, g, b);
         ((uint32_t *) d)[0] = rgb_to_pixel32(r, g, b);
         s += 2;
         d += 4;
