@@ -111,6 +111,10 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
         s->control = value & 0xff;
 
         qemu_irq_raise(s->irq);
+
+        if(value & 0x4 && s->active) {
+            s5l8900_i2c_receive(s);
+        }
         break;
 
     case I2CSTAT:
@@ -126,6 +130,7 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
                     break;
         }
         mode = (s->status >> 6) & 0x3;
+        // printf("mode = %d\n", mode);
         if (value & S5L8900_IICSTAT_TXRXEN) {
             /* IIC-bus data output enable/disable bit */
             switch(mode) {
@@ -136,7 +141,9 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
                 s->data = s5l8900_i2c_receive(s);
                 break;
             case MR_MODE:
+                // printf("MR_MODE!\n");
                 if (value & S5L8900_IICSTAT_START) {
+                    // printf("MR_MODE: START!\n");
                     /* START condition */
                     s->status &= ~S5L8900_IICSTAT_LASTBIT;
 
@@ -144,13 +151,16 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
                     s->active = 1;
                     i2c_start_transfer(s->bus, s->data, 1);
                 } else {
+                    // printf("MR_MODE: END!\n");
                     i2c_end_transfer(s->bus);
                     s->active = 0;
                     s->status |= S5L8900_IICSTAT_TXRXEN;
                 }
                 break;
             case MT_MODE:
+                // printf("MT_MODE!\n");
                 if (value & S5L8900_IICSTAT_START) {
+                    // printf("MT_MODE: START!\n");
                     /* START condition */
                     s->status &= ~S5L8900_IICSTAT_LASTBIT;
                         
@@ -158,6 +168,7 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
                     s->active = 1;
                     i2c_start_transfer(s->bus, s->data, 0);
                 } else {
+                    // printf("MT_MODE: END!\n");
                     i2c_end_transfer(s->bus);
                     s->active = 0;
                     s->status |= S5L8900_IICSTAT_TXRXEN;
@@ -175,7 +186,10 @@ static void ipod_touch_i2c_write(void *opaque, hwaddr offset, uint64_t value, un
         break;
 
     case I2CDS:
-        if(value != 0x40) s5l8900_i2c_send(s, value & 0xff);
+        // printf("I2CDS: 0x%02x\n", value);
+        // s->datashift = value & 0xff;
+        if(value & 1) s5l8900_i2c_receive(s);
+        else s5l8900_i2c_send(s, value & 0xff);
         break;
 
     case I2CLC:

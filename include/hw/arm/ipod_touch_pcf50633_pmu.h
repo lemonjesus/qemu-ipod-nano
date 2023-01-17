@@ -12,6 +12,8 @@
 #define TYPE_PCF50633                 "pcf50633"
 OBJECT_DECLARE_SIMPLE_TYPE(Pcf50633State, PCF50633)
 
+#define PMU_STATUSA 0x04
+
 #define PMU_MBCS1 0x4B
 #define PMU_ADCC1 0x57
 

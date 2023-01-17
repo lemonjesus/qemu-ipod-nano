@@ -16,14 +16,16 @@ static int int_to_bcd(int value) {
 
 static uint8_t pcf50633_recv(I2CSlave *i2c) {
     Pcf50633State *s = PCF50633(i2c);
-    printf("Reading PMU register %d\n", s->cmd);
 
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
 
-    int res = 0;
+    int res = 0xFF;
 
     switch(s->cmd) {
+        case PMU_STATUSA:
+            res = 0xFF; // battery present
+            break;
         case PMU_MBCS1:
             res = 0; // battery power source
             break;
@@ -58,8 +60,10 @@ static uint8_t pcf50633_recv(I2CSlave *i2c) {
             res = 0; // unknown register
             break;
         default:
-            res = 0;
+            res = 0xFF;
     }
+
+    printf("Reading PMU register 0x%02x = 0x%02x\n", s->cmd, res);
 
     s->cmd += 1;
     return res;

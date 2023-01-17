@@ -26,5 +26,5 @@ Run the iPhone code with:
 Configure for finding strange malloc bugs:
 
 ```
-../configure --enable-sdl --disable-cocoa --target-list=arm-softmmu --disable-capstone --disable-pie --disable-slirp --disable-werror --extra-cflags="-fno-omit-frame-pointer -fsanitize=address -g" --extra-ldflags='-lcrypto -fsanitize=address'
+../configure --enable-sdl --disable-cocoa --target-list=arm-softmmu --disable-capstone --disable-pie --disable-slirp --disable-werror --extra-cflags="-g" --extra-ldflags='-lcrypto'
 ```
