@@ -231,7 +231,7 @@ static void ipod_touch_memory_setup(MachineState *machine, MemoryRegion *sysmem,
     allocate_ram(sysmem, "iis1", IIS1_MEM_BASE, align_64k_high(0x1));
     allocate_ram(sysmem, "iis2", IIS2_MEM_BASE, align_64k_high(0x1));
 
-    allocate_ram(sysmem, "mpvd", MPVD_MEM_BASE, 0x70000);
+    // allocate_ram(sysmem, "mpvd", MPVD_MEM_BASE, 0x70000);
     allocate_ram(sysmem, "h264bpd", H264BPD_MEM_BASE, 4096);
 
     allocate_ram(sysmem, "framebuffer", FRAMEBUFFER_MEM_BASE, align_64k_high(4 * 320 * 480));
@@ -616,10 +616,22 @@ static void ipod_touch_machine_init(MachineState *machine)
     sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_ADM_IRQ));
     memory_region_add_subregion(sysmem, ADM_MEM_BASE, &adm_state->iomem);
 
+    // init JPEG engine
+    dev = qdev_new("s5l8702jpeg");
+    S5L8702JPEGState *jpeg_state = S5L8702JPEG(dev);
+    nms->jpeg_state = jpeg_state;
+    jpeg_state->sysmem = sysmem;
+    jpeg_state->nsas = nsas;
+    // object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_realize(busdev, &error_fatal);
+    sysbus_connect_irq(busdev, 0, s5l8900_get_irq(nms, S5L8900_ADM_IRQ));
+    memory_region_add_subregion(sysmem, MPVD_MEM_BASE, &jpeg_state->iomem);
+
     // init MBX
-    iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, OBJECT(nms), &mbx_ops, NULL, "mbx", 0x1000000);
-    memory_region_add_subregion(sysmem, MBX_MEM_BASE, iomem);
+    // iomem = g_new(MemoryRegion, 1);
+    // memory_region_init_io(iomem, OBJECT(nms), &mbx_ops, NULL, "mbx", 0x1000000);
+    // memory_region_add_subregion(sysmem, MBX_MEM_BASE, iomem);
 
     // init the chip ID module
     dev = qdev_new("ipodtouch.chipid");

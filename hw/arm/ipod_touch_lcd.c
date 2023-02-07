@@ -118,7 +118,7 @@ static void s5l8900_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
             case 0x2C:
                 address_space_rw(s->nsas, 0xfe00000 + s->memcnt, MEMTXATTRS_UNSPECIFIED, &val, 2, 1);
                 s->invalidate = true;
-                // printf("FB writing %04x to %08x\n", val, s->memcnt);
+                printf("FB writing %08x to %08x\n", val, s->memcnt);
                 s->memcnt += 2;
                 break;
             case 0x3A:
@@ -147,10 +147,10 @@ static void draw_line32_32(void *opaque, uint8_t *d, const uint8_t *s, int width
     uint8_t r, g, b;
 
     do {
-        //v = lduw_le_p((void *) s);
+        uint16_t v = lduw_le_p((void *) s);
         //printf("V: %d\n", *s);
         // convert 5-6-5 to 8-8-8
-        uint16_t v = ((uint16_t *) s)[0];
+        // uint16_t v = ((uint16_t *) s)[0];
         r = (uint8_t)(((v & 0xF800) >> 11) << 3);
         g = (uint8_t)(((v & 0x7E0) >> 5) << 2);
         b = (uint8_t)(((v & 0x1F)) << 3);
@@ -188,7 +188,7 @@ static void lcd_refresh(void *opaque)
     linesize = surface_stride(surface);
 
     if(lcd->invalidate) {
-        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, 0xfe00000, height, src_width);
+        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, 0xfe00002, height, src_width);
     }
 
     framebuffer_update_display(surface, &lcd->fbsection,

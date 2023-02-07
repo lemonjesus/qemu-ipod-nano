@@ -25,6 +25,7 @@
 #include "hw/arm/ipod_touch_gpio.h"
 #include "hw/arm/ipod_touch_sdio.h"
 #include "hw/i2c/ipod_touch_i2c.h"
+#include "hw/arm/ipod_nano3g_jpeg.h"
 #include "cpu.h"
 
 #define TYPE_IPOD_TOUCH "iPod-Touch"
@@ -162,6 +163,7 @@ typedef struct {
 	IPodTouchLCDState *lcd_state;
 	IPodTouchGPIOState *gpio_state;
 	IPodTouchSDIOState *sdio_state;
+	S5L8702JPEGState *jpeg_state;
 	Clock *sysclk;
 	uint32_t kpc_pa;
 	uint32_t kbootargs_pa;
