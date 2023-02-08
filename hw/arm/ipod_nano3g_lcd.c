@@ -188,7 +188,7 @@ static void lcd_refresh(void *opaque)
     linesize = surface_stride(surface);
 
     if(lcd->invalidate) {
-        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, 0xfe00002, height, src_width);
+        framebuffer_update_memory_section(&lcd->fbsection, lcd->sysmem, 0xfe00000, height, src_width);
     }
 
     framebuffer_update_display(surface, &lcd->fbsection,

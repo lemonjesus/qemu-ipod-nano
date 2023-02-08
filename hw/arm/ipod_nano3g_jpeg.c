@@ -24,8 +24,8 @@ static double idct_lookup[8][8][8][8];
 static void s5l8702_jpeg_decode(EncodedMCU* mcu, uint32_t* qtable1, uint32_t* qtable2, uint8_t* yout, uint8_t* cbout, uint8_t* crout) {
     DecodedMCU* decoded = malloc(sizeof(DecodedMCU) * 300);
     double *yplane = malloc(sizeof(double) * 320 * 240);
-    double *crplane = malloc(sizeof(double) * 320 * 240);
-    double *cbplane = malloc(sizeof(double) * 320 * 240);
+    double *crplane = malloc(sizeof(double) * 160 * 120);
+    double *cbplane = malloc(sizeof(double) * 160 * 120);
 
     int32_t dct_matrix[8][8];
 
@@ -124,10 +124,12 @@ static void s5l8702_jpeg_decode(EncodedMCU* mcu, uint32_t* qtable1, uint32_t* qt
     for (int i = 0; i < 320 * 240; i += 4) {
         // __builtin_bswap32 the pixels to reverse columns of 4 pixels in place in each channel
         uint32_t *y32 = (uint32_t *)&yout[i];
+        *y32 = __builtin_bswap32(*y32);
+    }
+
+    for (int i = 0; i < 160 * 120; i += 4) {
         uint32_t *cb32 = (uint32_t *)&cbout[i];
         uint32_t *cr32 = (uint32_t *)&crout[i];
-
-        *y32 = __builtin_bswap32(*y32);
         *cb32 = __builtin_bswap32(*cb32);
         *cr32 = __builtin_bswap32(*cr32);
     }
