@@ -550,7 +550,7 @@ config ARMSSE
     select SSE_COUNTER
     select SSE_TIMER
 
-config IPOD_TOUCH
+config IPOD_NANO3G
     bool
-    select IPOD_TOUCH
+    select IPOD_NANO3G
     select PL192
