@@ -13,6 +13,9 @@ target remote localhost:1234
 file /home/tucker/Development/qemu-ipod-nano/build/bootrom_symbols
 file /home/tucker/Development/qemu-ipod-nano/build/efi_adjusted_symbols
 
+# build the ipod-debug binary with -g to get various structs and global variables for a richer and more fulfilling debugging experience
+add-symbol-file ipod/ipod-debug
+
 tui new-layout vmdebug {-horizontal asm 1 regs 1} 2 cmd 1
 layout vmdebug
 focus cmd
@@ -34,8 +37,16 @@ break *0x9f022c0
 # break *0x9fbf242
 
 skip function efi_DxeMain_CoreLocateProtocol ()
-break *0x9ef802e
+break *0x9e942f8
 
 # awatch *0x89ea5020
 
 continue
+
+# table of contents of known global variables
+
+# p **and_data (the NAND Chip data structure)
+set and_data = 0x9e94388
+
+# p fil_func_tbl (the FIL function table)
+set fil_func_tbl = 0x9e945d8

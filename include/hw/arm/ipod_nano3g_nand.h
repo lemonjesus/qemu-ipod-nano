@@ -12,7 +12,8 @@
 #define NAND_BYTES_PER_PAGE 2048
 #define NAND_BYTES_PER_SPARE 64
 
-#define NAND_CHIP_ID 0xA514D3AD
+#define NAND_CHIP_ID 0x3ED5D72C
+#define NAND_NUM_BANKS_INSTALLED 2
 
 #define NAND_FMCTRL0  0x0
 #define NAND_FMCTRL1  0x4
@@ -25,6 +26,11 @@
 #define NAND_FMFIFO   0x80
 #define NAND_RSCTRL   0x100
 
+#define FMI_PROGRAM 0xc04
+#define FMI_INT 0xc0c
+#define FMI_START 0xc00
+#define FMI_DMEM 0xd00
+
 #define NAND_CMD_ID  0x90
 #define NAND_CMD_READ 0x30
 #define NAND_CMD_READSTATUS 0x70
@@ -34,6 +40,18 @@
 
 #define TYPE_ITNAND "itnand"
 OBJECT_DECLARE_SIMPLE_TYPE(ITNandState, ITNAND)
+
+#define FMIVSS_DMEM_SIZE 32
+typedef struct {
+    uint32_t regs[8];
+    // Address _inside_ the main device's DMA memory!
+    uint32_t pc;
+    uint32_t start_pc;
+
+    uint32_t dmem[FMIVSS_DMEM_SIZE];
+
+    AddressSpace *iomem;
+} fmiss_vm;
 
 typedef struct ITNandState {
     SysBusDevice busdev;
@@ -46,6 +64,10 @@ typedef struct ITNandState {
     uint32_t fmdnum;
 	uint32_t rsctrl;
 	uint32_t cmd;
+
+    uint32_t fmi_c00;
+    uint32_t fmi_program;
+    uint32_t fmi_int;
 	uint8_t reading_spare;
     qemu_irq irq;
 
@@ -60,6 +82,11 @@ typedef struct ITNandState {
     bool is_writing;
     QemuMutex lock;
     char *nand_path;
+
+    MemoryRegion *downstream;
+    AddressSpace *downstream_as;
+
+    fmiss_vm fmiss_vm;
 } ITNandState;
 
 void nand_set_buffered_page(ITNandState *s, uint32_t page);

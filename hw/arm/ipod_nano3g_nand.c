@@ -1,4 +1,110 @@
 #include "hw/arm/ipod_nano3g_nand.h"
+#include "hw/qdev-properties.h"
+#include "qapi/error.h"
+
+static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size);
+static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
+
+static void fmiss_vm_reset(fmiss_vm *vm, uint32_t pc) {
+    for (int i = 0; i < 8; i++) {
+        vm->regs[i] = 0;
+    }
+    vm->start_pc = pc;
+    vm->pc = pc;
+}
+
+static uint64_t fmiss_vm_fetch(fmiss_vm *vm) {
+    uint64_t val = 0;
+    address_space_read(vm->iomem, vm->pc, MEMTXATTRS_UNSPECIFIED, &val, 8);
+    return val;
+}
+
+// Reference: https://github.com/lemonjesus/S5L8702-FMISS-Tools/blob/main/Documentation.md
+static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
+    uint64_t ins = fmiss_vm_fetch(vm);
+
+    uint32_t imm = ins >> 32;
+    uint8_t opcode = ins >> 24;
+    uint8_t dst = ins >> 16;
+    uint16_t src = ins;
+    
+    // printf("fmiss_vm: at %08x: %016lx (%02x %02x %04x %08x)\n", vm->pc - vm->start_pc, ins, opcode, dst, src, imm);
+    switch (opcode) {
+    case 0: // Terminate.
+        return false;
+    case 1: // Write immediate to memory.
+        //printf("fmiss_vm: reg %08x <- %08x\n", src, imm);
+        itnand_write(opaque, src, imm, 4);
+        break;
+    case 2: // Write register to memory.
+        //printf("fmiss_vm: reg %08x <- %08x\n", src, vm->regs[dst%8]);
+        itnand_write(opaque, src, vm->regs[dst%8], 4);
+        break;
+    case 3: // Dereference address in register
+        address_space_read(vm->iomem, vm->regs[src%8] ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &(vm->regs[dst%8]), 4);
+        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 4: // Read from memory into a register.
+        uint32_t val = itnand_read(opaque, src, 4);
+        vm->regs[dst%8] = val;
+        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 5: // Read immediate into register.
+        vm->regs[dst%8] = imm;
+        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 7: // Unknown, possibly wait for FMCSTAT. No-op.
+        break;
+    case 11: // OR two registers and an immediate.
+        // This seems incorrect?
+        //vm->regs[dst%8] = vm->regs[dst%8] | vm->regs[src%8] | imm;
+        vm->regs[dst%8] = vm->regs[src%8] | imm;
+        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 12: // Add an Immediate to a Register
+        vm->regs[dst%8] = vm->regs[src%8] + imm;
+        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 13: // Subtract an Immediate from a Register
+        vm->regs[dst%8] = vm->regs[src%8] - imm;
+        // printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 14: // Jump If Not Equal.
+        if (vm->regs[dst%8] != src) {
+            vm->pc = vm->start_pc + imm;
+            return true;
+        }
+        break;
+    case 17: // Store a Register Value to a Memory Location Pointed to by a Register.
+        uint32_t addr = vm->regs[src%8];
+        uint32_t data = vm->regs[dst%8];
+        address_space_write(vm->iomem, addr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &data, 4);
+        printf("fmiss_vm: mem %08x <- %08x\n", addr, data);
+        break;
+    case 19: // Left Shift a Register by an Immediate
+        vm->regs[dst%8] = vm->regs[src%8] << imm;
+        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 23: // Jump if equal, but apparently not?
+        if (vm->regs[dst%8] == src) {
+            vm->pc = vm->start_pc + imm;
+            return true;
+        }
+        break;
+    default:
+        printf("fmiss_vm: unimplemented opcode %d!\n", opcode);
+        return false;
+    }
+    vm->pc += 8;
+    return true;
+}
+
+static void fmiss_vm_execute(void *opaque, fmiss_vm *vm) {
+    printf("fmiss_vm: starting execution at %08lx...\n", vm->start_pc);
+    while (fmiss_vm_step(opaque, vm)) {
+    }
+    printf("fmiss_vm: done executing\n");
+}
 
 static int get_bank(ITNandState *s) {
     uint32_t bank_bitmap = (s->fmctrl0 >> 1) & 0xFF;
@@ -28,7 +134,7 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
 
     if(bank != s->buffered_bank || page != s->buffered_page) {
         // refresh the buffered page
-        uint32_t vpn = page * 8 + bank;
+        //uint32_t vpn = page * 8 + bank;
         char filename[200];
         sprintf(filename, "%s/bank%d/%d.page", s->nand_path, bank, page);
         struct stat st = {0};
@@ -55,16 +161,26 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
 static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
 {
     ITNandState *s = (ITNandState *) opaque;
+    //printf("%s(%08lx)...\n", __func__, addr);
     if(s->reading_multiple_pages) {
-        //fprintf(stderr, "%s: reading from 0x%08x\n", __func__, addr);
+        fprintf(stderr, "%s: reading from 0x%08lx\n", __func__, addr);
+    }
+
+    if (addr >= FMI_DMEM && addr < (FMI_DMEM+4*FMIVSS_DMEM_SIZE)) {
+        uint32_t i = (addr - FMI_DMEM)/4;
+        return s->fmiss_vm.dmem[i];
     }
 
     switch (addr) {
         case NAND_FMCTRL0:
             return s->fmctrl0;
+        case NAND_FMCTRL1:
+            return s->fmctrl1;
         case NAND_FMFIFO:
             if(s->cmd == NAND_CMD_ID) {
-                return NAND_CHIP_ID;
+                printf("NAND Bank selected: %d\n", (((s->fmctrl0 && 0xF) >> 1) + 1));
+                if(((s->fmctrl0 & 0xF) >> 1) < NAND_NUM_BANKS_INSTALLED) return NAND_CHIP_ID;
+                else return 0;
             }
             else if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);
@@ -103,30 +219,60 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
                 return read_val;
             }
 
+        case 0x60:
+            if (s->cmd == NAND_CMD_ID) {
+                uint8_t bank = s->fmctrl0 >> 1;
+                switch (bank) {
+                case 1:
+                case 2:
+                    return NAND_CHIP_ID;
+                default:
+                    return 0;
+                }
+            }
+            return 0xdeadbeef;
         case NAND_FMCSTAT:
             return (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12); // this indicates that everything is ready, including our eight banks
         case NAND_RSCTRL:
             return s->rsctrl;
+        case FMI_PROGRAM:
+            return s->fmi_program;
+        case FMI_INT:
+            printf("FMI_INT: 0x%08x\n", s->fmi_int);
+            return s->fmi_int;
+        case FMI_START:
+            return 0;
+        case 0xc64:
+            return 1;
         default:
             break;
     }
+    printf("defaulting to 0\n");
     return 0;
 }
 
 static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
+    printf("%s(%08lx, %08lx)...\n", __func__, addr, val);
     ITNandState *s = (ITNandState *) opaque;
     if(s->reading_multiple_pages) {
-        //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+        fprintf(stderr, "%s: writing 0x%08lx to 0x%08lx\n", __func__, val, addr);
+    }
+
+    if (addr >= FMI_DMEM && addr < (FMI_DMEM+4*FMIVSS_DMEM_SIZE)) {
+        uint32_t i = (addr - FMI_DMEM)/4;
+        s->fmiss_vm.dmem[i] = val;
+        return;
     }
     
 
     switch(addr) {
         case NAND_FMCTRL0:
             s->fmctrl0 = val;
+            printf("NAND_FMCTRL0: 0x%08x\n", s->fmctrl0);
             break;
         case NAND_FMCTRL1:
-            s->fmctrl1 = val;
+            s->fmctrl1 = val | (1<<30);
             break;
         case NAND_FMADDR0:
             s->fmaddr0 = val;
@@ -163,7 +309,7 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
                 s->is_writing = false;
 
                 // flush the page buffer to the disk
-                uint32_t vpn = s->buffered_page * 8 + s->buffered_bank;
+                //uint32_t vpn = s->buffered_page * 8 + s->buffered_bank;
                 //printf("Flushing page %d, bank %d, vpn %d\n", s->buffered_page, s->buffered_bank, vpn);
                 qemu_mutex_lock(&s->lock);
                 qemu_mutex_unlock(&s->lock);
@@ -180,6 +326,22 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
             break;
         case NAND_RSCTRL:
             s->rsctrl = val;
+            break;
+        case FMI_PROGRAM:
+            s->fmi_program = val;
+            break;
+        case FMI_INT:
+            s->fmi_int &= ~val;
+            break;
+        case FMI_START:
+            if (val == 0xfff5) {
+                s->fmiss_vm.iomem = s->downstream_as;
+                fmiss_vm_reset(&s->fmiss_vm, s->fmi_program);
+                fmiss_vm_execute(opaque, &s->fmiss_vm);
+                qemu_irq_raise(s->irq);
+                s->fmi_int |= 1;
+            } else {
+            }
             break;
         default:
             break;
@@ -205,6 +367,8 @@ static void itnand_init(Object *obj)
     s->buffered_page = -1;
     s->buffered_bank = -1;
 
+    fmiss_vm_reset(&s->fmiss_vm, 0);
+
     qemu_mutex_init(&s->lock);
 }
 
@@ -220,6 +384,8 @@ static void itnand_reset(DeviceState *d)
     s->fmdnum = 0;
     s->rsctrl = 0;
     s->cmd = 0;
+    s->fmi_program = 0;
+    s->fmi_int = 0;
     s->reading_spare = 0;
     s->buffered_page = -1;
 }

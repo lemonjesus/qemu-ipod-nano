@@ -64,7 +64,7 @@ static void S5L8702_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
             break;
         case LCD_WCMD:
             s->lcd_wcmd = val;
-            if(val < 0x2A || val > 0x2C) printf("LCD Got Command 0x%08x\n", s->lcd_wcmd);
+            // if(val < 0x2A || val > 0x2C) printf("LCD Got Command 0x%08x\n", s->lcd_wcmd);
             switch(s->lcd_wcmd) {
                 case 0x04:
                     fifo8_reset(s->dbuff_buf);
@@ -118,7 +118,7 @@ static void S5L8702_lcd_write(void *opaque, hwaddr addr, uint64_t val, unsigned 
             case 0x2C:
                 address_space_rw(s->nsas, 0xfe00000 + s->memcnt, MEMTXATTRS_UNSPECIFIED, &val, 2, 1);
                 s->invalidate = true;
-                printf("FB writing %08x to %08x\n", val, s->memcnt);
+                // printf("FB writing %08x to %08x\n", val, s->memcnt);
                 s->memcnt += 2;
                 break;
             case 0x3A:
