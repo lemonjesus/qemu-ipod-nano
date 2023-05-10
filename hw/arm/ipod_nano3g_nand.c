@@ -2,6 +2,9 @@
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
 
+#define ENABLE_DEBUG 0
+#define FMISS_DEBUG if (ENABLE_DEBUG) printf
+
 static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size);
 static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
 
@@ -28,71 +31,106 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
     uint8_t dst = ins >> 16;
     uint16_t src = ins;
     
-    // printf("fmiss_vm: at %08x: %016lx (%02x %02x %04x %08x)\n", vm->pc - vm->start_pc, ins, opcode, dst, src, imm);
+    FMISS_DEBUG("fmiss_vm: at %08x: %016lx (%02x %02x %04x %08x)\n", vm->pc - vm->start_pc, ins, opcode, dst, src, imm);
     switch (opcode) {
-    case 0: // Terminate.
+    case 0x0: // Terminate.
         return false;
-    case 1: // Write immediate to memory.
-        //printf("fmiss_vm: reg %08x <- %08x\n", src, imm);
+    case 0x1: // Write immediate to memory.
+        FMISS_DEBUG("fmiss_vm: reg %08x <- %08x\n", src, imm);
         itnand_write(opaque, src, imm, 4);
         break;
-    case 2: // Write register to memory.
-        //printf("fmiss_vm: reg %08x <- %08x\n", src, vm->regs[dst%8]);
+    case 0x2: // Write register to memory.
+        FMISS_DEBUG("fmiss_vm: reg %08x <- %08x\n", src, vm->regs[dst%8]);
         itnand_write(opaque, src, vm->regs[dst%8], 4);
         break;
-    case 3: // Dereference address in register
+    case 0x3: // Dereference address in register
         address_space_read(vm->iomem, vm->regs[src%8] ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &(vm->regs[dst%8]), 4);
-        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 4: // Read from memory into a register.
+    case 0x4: // Read from memory into a register.
         uint32_t val = itnand_read(opaque, src, 4);
         vm->regs[dst%8] = val;
-        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 5: // Read immediate into register.
+    case 0x5: // Read immediate into register.
         vm->regs[dst%8] = imm;
-        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 7: // Unknown, possibly wait for FMCSTAT. No-op.
+    case 0x6: // simple mov
+        vm->regs[dst%8] = vm->regs[src%8];
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 11: // OR two registers and an immediate.
-        // This seems incorrect?
-        //vm->regs[dst%8] = vm->regs[dst%8] | vm->regs[src%8] | imm;
+    case 0x7: // Unknown, possibly wait for FMCSTAT. No-op.
+        break;
+    case 0xa: // AND two registers and an immediate.
+        // if (imm == 0) {
+        //     vm->regs[dst%8] &= vm->regs[src%8];
+        //     FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        //     break;
+        // } else {
+        //     vm->regs[dst%8] = vm->regs[src%8] & imm;
+        //     FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        //     break;
+        // }
+        vm->regs[dst%8] = vm->regs[src%8] & imm;
+
+        break;
+    case 0x0b: // OR two registers and an immediate.
+        // if (imm == 0) {
+        //     vm->regs[dst%8] |= vm->regs[src%8];
+        //     FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        //     break;
+        // } else {
+        //     vm->regs[dst%8] = vm->regs[src%8] | imm;
+        //     FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        //     break;
+        // }
         vm->regs[dst%8] = vm->regs[src%8] | imm;
-        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 12: // Add an Immediate to a Register
+    case 0x0c: // Add an Immediate to a Register
         vm->regs[dst%8] = vm->regs[src%8] + imm;
-        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 13: // Subtract an Immediate from a Register
+    case 0x0d: // Subtract an Immediate from a Register
         vm->regs[dst%8] = vm->regs[src%8] - imm;
-        // printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 14: // Jump If Not Equal.
-        if (vm->regs[dst%8] != src) {
+    case 0x0e: // Jump If Not Zero.
+        if (vm->regs[dst%8] != 0) {
             vm->pc = vm->start_pc + imm;
             return true;
         }
         break;
-    case 17: // Store a Register Value to a Memory Location Pointed to by a Register.
+    case 0x11: // Store a Register Value to a Memory Location Pointed to by a Register.
         uint32_t addr = vm->regs[src%8];
         uint32_t data = vm->regs[dst%8];
         address_space_write(vm->iomem, addr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &data, 4);
         printf("fmiss_vm: mem %08x <- %08x\n", addr, data);
         break;
-    case 19: // Left Shift a Register by an Immediate
+    case 0x13: // Left Shift a Register by an Immediate
         vm->regs[dst%8] = vm->regs[src%8] << imm;
-        //printf("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
-    case 23: // Jump if equal, but apparently not?
-        if (vm->regs[dst%8] == src) {
+    case 0x14: // Right Shift a Register by an Immediate
+        vm->regs[dst%8] = vm->regs[src%8] >> imm;
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
+        break;
+    case 0x17: // Jump if zero
+        if (vm->regs[dst%8] == 0) {
             vm->pc = vm->start_pc + imm;
             return true;
         }
         break;
+    case 0x18: // Load Register Value from DMA Memory Given by Offset in a Register
+        vm->regs[dst%8] = itnand_read(opaque, vm->regs[src%8], 4);
+        FMISS_DEBUG("fmiss_vm: r[%d] <- %08x (from r%d)\n", dst%8, vm->regs[dst%8], src%8);
+        break;
+    case 0x19:
+        itnand_write(opaque, vm->regs[src%8], vm->regs[dst%8], 4);
+        FMISS_DEBUG("fmiss_vm: mem %08x <- %08x (from r%d)\n", vm->regs[src%8], vm->regs[dst%8], src%8);
+        break;
     default:
-        printf("fmiss_vm: unimplemented opcode %d!\n", opcode);
+        printf("fmiss_vm: unimplemented opcode 0x%02X!\n", opcode);
         return false;
     }
     vm->pc += 8;
@@ -247,7 +285,7 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
         default:
             break;
     }
-    printf("defaulting to 0\n");
+    printf("defaulting %X to 0\n", addr);
     return 0;
 }
 

@@ -29,6 +29,11 @@ define dump
   x/32bx $pc
 end
 
+define done
+  kill
+  quit
+end
+
 # break on a CPU exception
 break *0x10
 break *0x9f022c0
@@ -37,9 +42,14 @@ break *0x9f022c0
 # break *0x9fbf242
 
 skip function efi_DxeMain_CoreLocateProtocol ()
-break *0x9e942f8
+# read scattered pages
+break *0x9e93a8a
 
-# awatch *0x89ea5020
+# read page no metadata
+break *0x9e93bac
+
+# erase page
+break *0x9e93bee
 
 continue
 
