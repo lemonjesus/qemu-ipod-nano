@@ -1,8 +1,8 @@
 #include "hw/arm/ipod_nano3g_nand_ecc.h"
 
-static uint64_t itnand_ecc_read(void *opaque, hwaddr addr, unsigned size)
+static uint64_t nand_ecc_read(void *opaque, hwaddr addr, unsigned size)
 {
-    ITNandECCState *s = (ITNandECCState *) opaque;
+    NandECCState *s = (NandECCState *) opaque;
     //fprintf(stderr, "%s: reading from 0x%08x\n", __func__, addr);
 
     switch (addr) {
@@ -14,9 +14,9 @@ static uint64_t itnand_ecc_read(void *opaque, hwaddr addr, unsigned size)
     return 0;
 }
 
-static void itnand_ecc_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+static void nand_ecc_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 {
-    ITNandECCState *s = (ITNandECCState *) opaque;
+    NandECCState *s = (NandECCState *) opaque;
 
     switch(addr) {
         case NANDECC_START:
@@ -31,23 +31,23 @@ static void itnand_ecc_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
 }
 
 static const MemoryRegionOps nand_ecc_ops = {
-    .read = itnand_ecc_read,
-    .write = itnand_ecc_write,
+    .read = nand_ecc_read,
+    .write = nand_ecc_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static void itnand_ecc_init(Object *obj)
+static void nand_ecc_init(Object *obj)
 {
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
-    ITNandECCState *s = ITNANDECC(obj);
+    NandECCState *s = IPOD_NANO3G_NANDECC(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &nand_ecc_ops, s, "nandecc", 0x100);
     sysbus_init_irq(sbd, &s->irq);
 }
 
-static void itnand_ecc_reset(DeviceState *d)
+static void nand_ecc_reset(DeviceState *d)
 {
-    ITNandECCState *s = (ITNandECCState *) d;
+    NandECCState *s = (NandECCState *) d;
 
     s->data_addr = 0;
     s->ecc_addr = 0;
@@ -55,23 +55,23 @@ static void itnand_ecc_reset(DeviceState *d)
     s->setup = 0;
 }
 
-static void itnand_ecc_class_init(ObjectClass *oc, void *data)
+static void nand_ecc_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
-    dc->reset = itnand_ecc_reset;
+    dc->reset = nand_ecc_reset;
 }
 
-static const TypeInfo itnand_ecc_info = {
-    .name          = TYPE_ITNANDECC,
+static const TypeInfo nand_ecc_info = {
+    .name          = TYPE_IPOD_NANO3G_NANDECC,
     .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(ITNandECCState),
-    .instance_init = itnand_ecc_init,
-    .class_init    = itnand_ecc_class_init,
+    .instance_size = sizeof(NandECCState),
+    .instance_init = nand_ecc_init,
+    .class_init    = nand_ecc_class_init,
 };
 
-static void itnand_ecc_register_types(void)
+static void nand_ecc_register_types(void)
 {
-    type_register_static(&itnand_ecc_info);
+    type_register_static(&nand_ecc_info);
 }
 
-type_init(itnand_ecc_register_types)
+type_init(nand_ecc_register_types)

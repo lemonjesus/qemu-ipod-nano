@@ -32,7 +32,7 @@ typedef struct IPodNano3GADMState {
     MemoryRegion *downstream;
     AddressSpace downstream_as;
 
-    ITNandState *nand_state;
+    NandState *nand_state;
 } IPodNano3GADMState;
 
 #endif

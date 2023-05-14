@@ -3,7 +3,7 @@
 #include "hw/arm/ipod_nano3g_nand.h"
 #include "qapi/error.h"
 
-static void set_bank(ITNandState *s, uint8_t activate_bank) {
+static void set_bank(NandState *s, uint8_t activate_bank) {
     for(int bank = 0; bank < 8; bank++) {
         // clear bit, toggle if it is active
         s->fmctrl0 &= ~(1 << (bank + 1));

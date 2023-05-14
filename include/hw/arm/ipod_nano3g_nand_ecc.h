@@ -14,10 +14,10 @@
 #define NANDECC_SETUP 0x14
 #define NANDECC_CLEARINT 0x40
 
-#define TYPE_ITNANDECC "itnand_ecc"
-OBJECT_DECLARE_SIMPLE_TYPE(ITNandECCState, ITNANDECC)
+#define TYPE_IPOD_NANO3G_NANDECC "ipodnano3g.nand_ecc"
+OBJECT_DECLARE_SIMPLE_TYPE(NandECCState, IPOD_NANO3G_NANDECC)
 
-typedef struct ITNandECCState {
+typedef struct NandECCState {
     SysBusDevice busdev;
     MemoryRegion iomem;
     uint32_t data_addr;
@@ -25,6 +25,6 @@ typedef struct ITNandECCState {
     uint32_t status;
     uint32_t setup;
     qemu_irq irq;
-} ITNandECCState;
+} NandECCState;
 
 #endif

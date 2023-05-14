@@ -512,8 +512,8 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, ENGINE_8702_MEM_BASE, iomem);
 
     // init NAND flash
-    dev = qdev_new("itnand");
-    ITNandState *nand_state = ITNAND(dev);
+    dev = qdev_new("ipodnano3g.nand");
+    NandState *nand_state = IPOD_NANO3G_NAND(dev);
     nand_state->nand_path = &nms->nand_path;
     nand_state->downstream_as = nsas;
     nms->nand_state = nand_state;
@@ -521,8 +521,8 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     memory_region_add_subregion(sysmem, NAND_MEM_BASE, &nand_state->iomem);
 
     // init NAND ECC module
-    dev = qdev_new("itnand_ecc");
-    ITNandECCState *nand_ecc_state = ITNANDECC(dev);
+    dev = qdev_new("ipodnano3g.nand_ecc");
+    NandECCState *nand_ecc_state = IPOD_NANO3G_NANDECC(dev);
     nms->nand_ecc_state = nand_ecc_state;
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_connect_irq(busdev, 0, S5L8702_get_irq(nms, S5L8702_NAND_ECC_IRQ));

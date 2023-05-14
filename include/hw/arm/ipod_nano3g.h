@@ -151,8 +151,8 @@ typedef struct {
 	S5L8702_usb_phys_s *usb_phys;
 	S5L8702AESState *aes_state;
 	S5L8702SHA1State *sha1_state;
-	ITNandState *nand_state;
-	ITNandECCState *nand_ecc_state;
+	NandState *nand_state;
+	NandECCState *nand_ecc_state;
 	IPodNano3GI2CState *i2c0_state;
 	IPodNano3GI2CState *i2c1_state;
 	IPodNano3GADMState *adm_state;

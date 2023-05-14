@@ -38,8 +38,8 @@
 #define FILESYSTEM_START_VPN 206851
 #define FILESYSTEM_NUM_PAGES 132854
 
-#define TYPE_ITNAND "itnand"
-OBJECT_DECLARE_SIMPLE_TYPE(ITNandState, ITNAND)
+#define TYPE_IPOD_NANO3G_NAND "ipodnano3g.nand"
+OBJECT_DECLARE_SIMPLE_TYPE(NandState, IPOD_NANO3G_NAND)
 
 #define FMIVSS_DMEM_SIZE 32
 typedef struct {
@@ -53,7 +53,7 @@ typedef struct {
     AddressSpace *iomem;
 } fmiss_vm;
 
-typedef struct ITNandState {
+typedef struct NandState {
     SysBusDevice busdev;
     MemoryRegion iomem;
     uint32_t fmctrl0;
@@ -87,8 +87,8 @@ typedef struct ITNandState {
     AddressSpace *downstream_as;
 
     fmiss_vm fmiss_vm;
-} ITNandState;
+} NandState;
 
-void nand_set_buffered_page(ITNandState *s, uint32_t page);
+void nand_set_buffered_page(NandState *s, uint32_t page);
 
 #endif

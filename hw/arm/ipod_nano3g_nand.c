@@ -2,11 +2,11 @@
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
 
-#define ENABLE_DEBUG 0
-#define FMISS_DEBUG if (ENABLE_DEBUG) printf
+#define ENABLE_FMISS_DEBUG 1
+#define FMISS_DEBUG if (ENABLE_FMISS_DEBUG) printf
 
-static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size);
-static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
+static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size);
+static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
 
 static void fmiss_vm_reset(fmiss_vm *vm, uint32_t pc) {
     for (int i = 0; i < 8; i++) {
@@ -37,18 +37,18 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
         return false;
     case 0x1: // Write immediate to memory.
         FMISS_DEBUG("fmiss_vm: reg %08x <- %08x\n", src, imm);
-        itnand_write(opaque, src, imm, 4);
+        nand_mem_write(opaque, src, imm, 4);
         break;
     case 0x2: // Write register to memory.
         FMISS_DEBUG("fmiss_vm: reg %08x <- %08x\n", src, vm->regs[dst%8]);
-        itnand_write(opaque, src, vm->regs[dst%8], 4);
+        nand_mem_write(opaque, src, vm->regs[dst%8], 4);
         break;
     case 0x3: // Dereference address in register
         address_space_read(vm->iomem, vm->regs[src%8] ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &(vm->regs[dst%8]), 4);
         FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
     case 0x4: // Read from memory into a register.
-        uint32_t val = itnand_read(opaque, src, 4);
+        uint32_t val = nand_mem_read(opaque, src, 4);
         vm->regs[dst%8] = val;
         FMISS_DEBUG("fmiss_vm: r[%d] <- %08x\n", dst%8, vm->regs[dst%8]);
         break;
@@ -122,11 +122,11 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
         }
         break;
     case 0x18: // Load Register Value from DMA Memory Given by Offset in a Register
-        vm->regs[dst%8] = itnand_read(opaque, vm->regs[src%8], 4);
+        vm->regs[dst%8] = nand_mem_read(opaque, vm->regs[src%8], 4);
         FMISS_DEBUG("fmiss_vm: r[%d] <- %08x (from r%d)\n", dst%8, vm->regs[dst%8], src%8);
         break;
     case 0x19:
-        itnand_write(opaque, vm->regs[src%8], vm->regs[dst%8], 4);
+        nand_mem_write(opaque, vm->regs[src%8], vm->regs[dst%8], 4);
         FMISS_DEBUG("fmiss_vm: mem %08x <- %08x (from r%d)\n", vm->regs[src%8], vm->regs[dst%8], src%8);
         break;
     default:
@@ -144,7 +144,7 @@ static void fmiss_vm_execute(void *opaque, fmiss_vm *vm) {
     printf("fmiss_vm: done executing\n");
 }
 
-static int get_bank(ITNandState *s) {
+static int get_bank(NandState *s) {
     uint32_t bank_bitmap = (s->fmctrl0 >> 1) & 0xFF;
     for(int bank = 0; bank < NAND_NUM_BANKS; bank++) {
         if((bank_bitmap & (1 << bank)) != 0) {
@@ -154,7 +154,7 @@ static int get_bank(ITNandState *s) {
     return -1;
 }
 
-static void set_bank(ITNandState *s, uint32_t activate_bank) {
+static void set_bank(NandState *s, uint32_t activate_bank) {
     for(int bank = 0; bank < 8; bank++) {
         // clear bit, toggle if it is active
         s->fmctrl0 &= ~(1 << (bank + 1));
@@ -164,7 +164,7 @@ static void set_bank(ITNandState *s, uint32_t activate_bank) {
     }
 }
 
-void nand_set_buffered_page(ITNandState *s, uint32_t page) {
+void nand_set_buffered_page(NandState *s, uint32_t page) {
     uint32_t bank = get_bank(s);
     if(bank == -1) {
         hw_error("Active bank not set while nand_read with page %d is called (reading multiple pages: %d)!", page, s->reading_multiple_pages);
@@ -196,9 +196,8 @@ void nand_set_buffered_page(ITNandState *s, uint32_t page) {
     }
 }
 
-static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
-{
-    ITNandState *s = (ITNandState *) opaque;
+static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
+    NandState *s = (NandState *) opaque;
     //printf("%s(%08lx)...\n", __func__, addr);
     if(s->reading_multiple_pages) {
         fprintf(stderr, "%s: reading from 0x%08lx\n", __func__, addr);
@@ -280,6 +279,8 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
             return s->fmi_int;
         case FMI_START:
             return 0;
+        case 0xC18 ... 0xC34:
+            return s->fmiss_vm.regs[(addr - 0xC18) / 4];
         case 0xc64:
             return 1;
         default:
@@ -289,10 +290,9 @@ static uint64_t itnand_read(void *opaque, hwaddr addr, unsigned size)
     return 0;
 }
 
-static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
+static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
     printf("%s(%08lx, %08lx)...\n", __func__, addr, val);
-    ITNandState *s = (ITNandState *) opaque;
+    NandState *s = (NandState *) opaque;
     if(s->reading_multiple_pages) {
         fprintf(stderr, "%s: writing 0x%08lx to 0x%08lx\n", __func__, val, addr);
     }
@@ -303,7 +303,6 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
         return;
     }
     
-
     switch(addr) {
         case NAND_FMCTRL0:
             s->fmctrl0 = val;
@@ -387,15 +386,14 @@ static void itnand_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
 }
 
 static const MemoryRegionOps nand_ops = {
-    .read = itnand_read,
-    .write = itnand_write,
+    .read = nand_mem_read,
+    .write = nand_mem_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static void itnand_init(Object *obj)
-{
+static void nand_init(Object *obj) {
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
-    ITNandState *s = ITNAND(obj);
+    NandState *s = IPOD_NANO3G_NAND(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &nand_ops, s, "nand", 0x1000);
     sysbus_init_irq(sbd, &s->irq);
@@ -410,9 +408,9 @@ static void itnand_init(Object *obj)
     qemu_mutex_init(&s->lock);
 }
 
-static void itnand_reset(DeviceState *d)
+static void nand_reset(DeviceState *d)
 {
-    ITNandState *s = (ITNandState *) d;
+    NandState *s = (NandState *) d;
 
     s->fmctrl0 = 0;
     s->fmctrl1 = 0;
@@ -428,23 +426,23 @@ static void itnand_reset(DeviceState *d)
     s->buffered_page = -1;
 }
 
-static void itnand_class_init(ObjectClass *oc, void *data)
+static void nand_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
-    dc->reset = itnand_reset;
+    dc->reset = nand_reset;
 }
 
-static const TypeInfo itnand_info = {
-    .name          = TYPE_ITNAND,
+static const TypeInfo nand_info = {
+    .name          = TYPE_IPOD_NANO3G_NAND,
     .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(ITNandState),
-    .instance_init = itnand_init,
-    .class_init    = itnand_class_init,
+    .instance_size = sizeof(NandState),
+    .instance_init = nand_init,
+    .class_init    = nand_class_init,
 };
 
-static void itnand_register_types(void)
+static void nand_register_types(void)
 {
-    type_register_static(&itnand_info);
+    type_register_static(&nand_info);
 }
 
-type_init(itnand_register_types)
+type_init(nand_register_types)
