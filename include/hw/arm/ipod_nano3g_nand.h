@@ -22,8 +22,9 @@
 #define NAND_FMADDR1  0x10
 #define NAND_FMANUM   0x2C
 #define NAND_FMDNUM   0x30
+#define NAND_DESTADDR 0x34
 #define NAND_FMCSTAT  0x48
-#define NAND_FMFIFO   0x80
+#define NAND_FMFIFO   0x60
 #define NAND_RSCTRL   0x100
 
 #define FMI_PROGRAM 0xc04
@@ -62,6 +63,7 @@ typedef struct NandState {
     uint32_t fmaddr1;
     uint32_t fmanum;
     uint32_t fmdnum;
+    uint32_t destaddr;
 	uint32_t rsctrl;
 	uint32_t cmd;
 
