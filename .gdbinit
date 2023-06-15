@@ -45,11 +45,10 @@ skip function efi_DxeMain_CoreLocateProtocol ()
 # read scattered pages
 break *0x9e93a8a
 
-# read page no metadata
-break *0x9e93bac
-
 # erase page
 break *0x9e93bee
+
+break *0x9e92bb0
 
 continue
 

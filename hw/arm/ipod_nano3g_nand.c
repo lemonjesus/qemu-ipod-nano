@@ -2,7 +2,7 @@
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
 
-#define ENABLE_FMISS_DEBUG 1
+#define ENABLE_FMISS_DEBUG 0
 #define FMISS_DEBUG if (ENABLE_FMISS_DEBUG) printf
 
 static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size);
@@ -150,8 +150,8 @@ static void fmiss_vm_execute(void *opaque, fmiss_vm *vm) {
 }
 
 static int get_bank(NandState *s) {
-    uint32_t bank = __builtin_ctz(s->fmctrl0 >> 1);
-    printf("fmctrl0: 0x%08x (bank %d selected)\n", __builtin_bswap32(s->fmctrl0), bank);
+    uint32_t bank = (s->fmctrl0 & 0Xf) >> 1;
+    printf("fmctrl0: 0x%08x (bank %d selected)\n", s->fmctrl0, bank);
     if(bank > 7) return -1;
     return bank;
 }
@@ -169,7 +169,7 @@ static void set_bank(NandState *s, uint32_t activate_bank) {
 void nand_set_buffered_page(NandState *s, uint32_t page) {
     uint32_t bank = get_bank(s);
     if(bank == -1) {
-        printf("Active bank not set while nand_read with page %d is called (reading multiple pages: %d)!", page, s->reading_multiple_pages);
+        printf("Active bank not set while nand_read with page %d is called (reading multiple pages: %d)!\n", page, s->reading_multiple_pages);
     }
 
     if(bank != s->buffered_bank || page != s->buffered_page) {
@@ -248,13 +248,18 @@ static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
                 } else {
                     uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
                     nand_set_buffered_page(s, page);
-                    printf("Reading page %d\n", page);
+                    printf("Reading page 0x%X to 0x%08X, fmdnum: %d\n", page, s->destaddr, s->fmdnum);
 
-                    if(s->reading_spare) {
-                        read_val = ((uint32_t *)s->page_spare_buffer)[(NAND_BYTES_PER_SPARE - s->fmdnum - 1) / 4];
-                    } else {
-                        read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum - 1) / 4];
-                    }
+                    // read the data
+                    void* buffer = malloc(NAND_BYTES_PER_PAGE);
+                    cow_read(s->nand_banks[get_bank(s)], buffer, page * NAND_BYTES_PER_PAGE, NAND_BYTES_PER_PAGE);
+                    address_space_write(s->downstream_as, s->destaddr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, buffer, NAND_BYTES_PER_PAGE);
+
+                    // if(s->reading_spare) {
+                    //     read_val = ((uint32_t *)s->page_spare_buffer)[(NAND_BYTES_PER_SPARE - s->fmdnum - 1) / 4];
+                    // } else {
+                    //     read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum - 1) / 4];
+                    // }
                 }
                 s->fmdnum -= 4;
                 return read_val;
@@ -262,10 +267,12 @@ static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
 
         case 0x80:
             if (s->cmd == NAND_CMD_ID) {
-                uint8_t bank = s->fmctrl0 >> 1;
+                uint8_t bank = get_bank(s);
                 switch (bank) {
                 case 1:
                 case 2:
+                case 3:
+                case 4:
                     return NAND_CHIP_ID;
                 default:
                     return 0;
@@ -422,6 +429,12 @@ static void nand_init(Object *obj) {
     s->buffered_bank = -1;
 
     fmiss_vm_reset(&s->fmiss_vm, 0);
+
+    s->nand_banks = (cow_file**) malloc(sizeof(cow_file*) * NAND_NUM_BANKS);
+    s->nand_banks[0] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank0.bin");
+    s->nand_banks[1] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank1.bin");
+    s->nand_banks[2] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank2.bin");
+    s->nand_banks[3] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank3.bin");
 
     qemu_mutex_init(&s->lock);
 }

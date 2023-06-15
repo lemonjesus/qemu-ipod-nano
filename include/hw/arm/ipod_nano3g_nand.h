@@ -7,13 +7,14 @@
 #include "hw/hw.h"
 #include "hw/irq.h"
 #include "qemu/lockable.h"
+#include "file-cow.h"
 
 #define NAND_NUM_BANKS 8
 #define NAND_BYTES_PER_PAGE 2048
 #define NAND_BYTES_PER_SPARE 64
 
-#define NAND_CHIP_ID 0x3ED5D72C
-#define NAND_NUM_BANKS_INSTALLED 2
+#define NAND_CHIP_ID 0xA5D5D589
+#define NAND_NUM_BANKS_INSTALLED 4
 
 #define NAND_FMCTRL0  0x0
 #define NAND_FMCTRL1  0x4
@@ -83,8 +84,11 @@ typedef struct NandState {
     uint32_t pages_to_read[512]; // used when in multiple page read mode
     bool is_writing;
     QemuMutex lock;
-    char *nand_path;
 
+    char *nand_path;
+    cow_file** nand_banks;
+
+    MemoryRegion *sysmem;
     MemoryRegion *downstream;
     AddressSpace *downstream_as;
 

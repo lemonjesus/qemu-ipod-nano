@@ -516,6 +516,7 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     NandState *nand_state = IPOD_NANO3G_NAND(dev);
     nand_state->nand_path = &nms->nand_path;
     nand_state->downstream_as = nsas;
+    nand_state->sysmem = sysmem;
     nms->nand_state = nand_state;
     sysbus_connect_irq(busdev, 0, S5L8702_get_irq(nms, S5L8702_NAND_IRQ));
     memory_region_add_subregion(sysmem, NAND_MEM_BASE, &nand_state->iomem);
