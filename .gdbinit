@@ -5,7 +5,7 @@
 #   add-auto-load-safe-path /path/to/qemu/.gdbinit
 
 # Load QEMU-specific sub-commands and settings
-source scripts/qemu-gdb.py
+# source scripts/qemu-gdb.py
 
 set pagination off
 target remote localhost:1234
@@ -14,7 +14,7 @@ file /home/tucker/Development/qemu-ipod-nano/build/bootrom_symbols
 file /home/tucker/Development/qemu-ipod-nano/build/efi_adjusted_symbols
 
 # build the ipod-debug binary with -g to get various structs and global variables for a richer and more fulfilling debugging experience
-add-symbol-file ipod/ipod-debug
+add-symbol-file /home/tucker/Development/qemu-ipod-nano/ipod/ipod-debug
 
 tui new-layout vmdebug {-horizontal asm 1 regs 1} 2 cmd 1
 layout vmdebug
@@ -42,13 +42,12 @@ break *0x9f022c0
 # break *0x9fbf242
 
 skip function efi_DxeMain_CoreLocateProtocol ()
-# read scattered pages
-break *0x9e93a8a
 
-# erase page
-break *0x9e93bee
+# nand_VFL_Read
+break *0x9e8dd88
+break *0x9e8ddc0
 
-break *0x9e92bb0
+break *0x9e94264
 
 continue
 

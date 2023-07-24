@@ -2,7 +2,7 @@
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
 
-#define ENABLE_FMISS_DEBUG 0
+#define ENABLE_FMISS_DEBUG 1
 #define FMISS_DEBUG if (ENABLE_FMISS_DEBUG) printf
 
 static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size);
@@ -48,20 +48,20 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
         nand_mem_write(opaque, src, vm->regs[dst_reg], 4);
         break;
     case 0x3: // Dereference address in register
-        FMISS_DEBUG("fmiss_vm: r%d <- *0x%08x (from r%d)\n", dst_reg, vm->regs[src_reg] ^ 0x80000000, src_reg);
         address_space_read(vm->iomem, vm->regs[src_reg] ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &(vm->regs[dst_reg]), 4);
+        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (*0x%08x from r%d)\n", vm->regs[dst_reg], dst_reg, vm->regs[src_reg] ^ 0x80000000, src_reg);
         break;
     case 0x4: // Read from memory into a register.
         uint32_t val = nand_mem_read(opaque, src, 4);
-        FMISS_DEBUG("fmiss_vm: r%d <- *0x%08x (0x%08x) & %0x08\n", dst_reg, src + 0x38A00000, val, imm);
+        FMISS_DEBUG("fmiss_vm: r%d <- *0x%08x (0x%08x) & 0x%08x\n", dst_reg, src + 0x38A00000, val, imm);
         vm->regs[dst_reg] = val & imm;
         break;
     case 0x5: // Read immediate into register.
-        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (immediate)\n", dst_reg, vm->regs[dst_reg]);
+        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (immediate)\n", dst_reg, imm);
         vm->regs[dst_reg] = imm;
         break;
     case 0x6: // simple mov
-        FMISS_DEBUG("fmiss_vm: r%d <- r%d (0x%08x)\n", dst_reg, src_reg, vm->regs[dst_reg]);
+        FMISS_DEBUG("fmiss_vm: r%d <- r%d (0x%08x)\n", dst_reg, src_reg, vm->regs[src_reg]);
         vm->regs[dst_reg] = vm->regs[src_reg];
         break;
     case 0x7: // Unknown, possibly wait for FMCSTAT. No-op.
@@ -90,12 +90,22 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
         }
         break;
     case 0x0c: // Add an Immediate to a Register
-        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) + 0x%08x)\n", dst_reg, vm->regs[src_reg] + imm, src_reg, vm->regs[src_reg], imm);
-        vm->regs[dst_reg] = vm->regs[src_reg] + imm;
+        if(imm == 0) {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) + r%d (0x%08x))\n", dst_reg, vm->regs[src_reg] + vm->regs[dst_reg], dst_reg, vm->regs[dst_reg], src_reg, vm->regs[src_reg]);
+            vm->regs[dst_reg] += vm->regs[src_reg];
+        } else {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) + 0x%08x)\n", dst_reg, vm->regs[src_reg] + imm, src_reg, vm->regs[src_reg], imm);
+            vm->regs[dst_reg] = vm->regs[src_reg] + imm;
+        }
         break;
     case 0x0d: // Subtract an Immediate from a Register
-        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) - 0x%08x)\n", dst_reg, vm->regs[src_reg] - imm, src_reg, vm->regs[src_reg], imm);
-        vm->regs[dst_reg] = vm->regs[src_reg] - imm;
+        if(imm == 0) {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) - r%d (0x%08x))\n", dst_reg, vm->regs[src_reg] - vm->regs[dst_reg], dst_reg, vm->regs[dst_reg], src_reg, vm->regs[src_reg]);
+            vm->regs[dst_reg] -= vm->regs[src_reg];
+        } else {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) - 0x%08x)\n", dst_reg, vm->regs[src_reg] - imm, src_reg, vm->regs[src_reg], imm);
+            vm->regs[dst_reg] = vm->regs[src_reg] - imm;
+        }
         break;
     case 0x0e: // Jump If Not Zero.
         FMISS_DEBUG("fmiss_vm: jnz r%d (0x%08x), 0x%08x (jump %staken)\n", dst_reg, vm->regs[dst_reg], imm, vm->regs[dst_reg] != 0 ? "" : "not ");
@@ -111,12 +121,22 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
         address_space_write(vm->iomem, addr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, &data, 4);
         break;
     case 0x13: // Left Shift a Register by an Immediate
-        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) << 0x%08x)\n", dst_reg, vm->regs[src_reg] << imm, src_reg, vm->regs[src_reg], imm);
-        vm->regs[dst_reg] = vm->regs[src_reg] << imm;
+        if(imm == 0) {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) << r%d (0x%08x))\n", dst_reg, vm->regs[src_reg] << vm->regs[dst_reg], dst_reg, vm->regs[dst_reg], src_reg, vm->regs[src_reg]);
+            vm->regs[dst_reg] <<= vm->regs[src_reg];
+        } else {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) << 0x%08x)\n", dst_reg, vm->regs[src_reg] << imm, src_reg, vm->regs[src_reg], imm);
+            vm->regs[dst_reg] = vm->regs[src_reg] << imm;
+        }
         break;
     case 0x14: // Right Shift a Register by an Immediate
-        FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) >> 0x%08x)\n", dst_reg, vm->regs[src_reg] >> imm, src_reg, vm->regs[src_reg], imm);
-        vm->regs[dst_reg] = vm->regs[src_reg] >> imm;
+        if(imm == 0) {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) >> r%d (0x%08x))\n", dst_reg, vm->regs[src_reg] >> vm->regs[dst_reg], dst_reg, vm->regs[dst_reg], src_reg, vm->regs[src_reg]);
+            vm->regs[dst_reg] >>= vm->regs[src_reg];
+        } else {
+            FMISS_DEBUG("fmiss_vm: r%d <- 0x%08x (r%d (0x%08x) >> 0x%08x)\n", dst_reg, vm->regs[src_reg] >> imm, src_reg, vm->regs[src_reg], imm);
+            vm->regs[dst_reg] = vm->regs[src_reg] >> imm;
+        }
         break;
     case 0x17: // Jump if zero
         FMISS_DEBUG("fmiss_vm: jz r%d (0x%08x), 0x%08x (jump %staken)\n", dst_reg, vm->regs[dst_reg], imm, vm->regs[dst_reg] == 0 ? "" : "not ");
@@ -150,7 +170,7 @@ static void fmiss_vm_execute(void *opaque, fmiss_vm *vm) {
 }
 
 static int get_bank(NandState *s) {
-    uint32_t bank = (s->fmctrl0 & 0Xf) >> 1;
+    uint32_t bank = __builtin_ctz(s->fmctrl0 >> 1);
     printf("fmctrl0: 0x%08x (bank %d selected)\n", s->fmctrl0, bank);
     if(bank > 7) return -1;
     return bank;
@@ -212,14 +232,15 @@ static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
 
     switch (addr) {
         case NAND_FMCTRL0:
+            printf("Reading from FMCTRL0: %08X\n", s->fmctrl0);
             return s->fmctrl0;
         case NAND_FMCTRL1:
             return s->fmctrl1;
         case NAND_FMFIFO:
             printf("Reading from FMFIFO, cmd: %02x\n", s->cmd);
             if(s->cmd == NAND_CMD_ID) {
-                printf("NAND Bank selected: %d\n", (((s->fmctrl0 && 0xF) >> 1) + 1));
-                if(((s->fmctrl0 & 0xF) >> 1) < NAND_NUM_BANKS_INSTALLED) return NAND_CHIP_ID;
+                printf("FIFO Reading ID from bank %d, will return %x\n", get_bank(s), (get_bank(s) < NAND_NUM_BANKS_INSTALLED ? NAND_CHIP_ID : 0));
+                if(get_bank(s) < NAND_NUM_BANKS_INSTALLED) return NAND_CHIP_ID;
                 else return 0;
             }
             else if(s->cmd == NAND_CMD_READSTATUS) {
@@ -241,42 +262,40 @@ static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
                     uint32_t page_offset = s->fmdnum % 0x800;
                     if(page_offset == 0) { page_offset = 0x800; }
                     nand_set_buffered_page(s, s->pages_to_read[s->cur_bank_reading]);
-                    printf("Reading page %d\n", s->pages_to_read[s->cur_bank_reading]);
+                    printf("Reading bank %d page %d\n", get_bank(s), s->pages_to_read[s->cur_bank_reading]);
                     read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - page_offset) / 4];
                     printf("FMDNUM: %d, offset: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - page_offset) / 4);
                     printf("Page offset: %d, bytes: 0x%08x\n", page_offset, read_val);
                 } else {
                     uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
                     nand_set_buffered_page(s, page);
-                    printf("Reading page 0x%X to 0x%08X, fmdnum: %d\n", page, s->destaddr, s->fmdnum);
+                    printf("Reading bank %d page 0x%X to 0x%08X, fmctrl0: %x\n", get_bank(s), page, s->destaddr, s->fmctrl0);
 
                     // read the data
                     void* buffer = malloc(NAND_BYTES_PER_PAGE);
                     cow_read(s->nand_banks[get_bank(s)], buffer, page * NAND_BYTES_PER_PAGE, NAND_BYTES_PER_PAGE);
                     address_space_write(s->downstream_as, s->destaddr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, buffer, NAND_BYTES_PER_PAGE);
+                    free(buffer);
 
-                    // if(s->reading_spare) {
-                    //     read_val = ((uint32_t *)s->page_spare_buffer)[(NAND_BYTES_PER_SPARE - s->fmdnum - 1) / 4];
-                    // } else {
-                    //     read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum - 1) / 4];
-                    // }
+                    // read the spare data
+                    cow_read(s->nand_spares[get_bank(s)], s->spare_buffer, page * 16, 12);
                 }
                 s->fmdnum -= 4;
-                return read_val;
+                printf("FIFO[0] read: 0x%08x\n", s->spare_buffer[0]);
+                return s->spare_buffer[0];
             }
+        case 0x64:
+            printf("FIFO[1] read: 0x%08x\n", s->spare_buffer[1]);
+            return s->spare_buffer[1]; // "reserved" field in the VFLSpare struct
+        case 0x68:
+            printf("FIFO[2] read: 0x%08x\n", s->spare_buffer[2]);
+            return s->spare_buffer[2]; // third byte is the VFLSpare Sparetype (0x80 for now), the fourth byte is the StatusMark. the other two bytes are unused.
 
         case 0x80:
             if (s->cmd == NAND_CMD_ID) {
-                uint8_t bank = get_bank(s);
-                switch (bank) {
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                    return NAND_CHIP_ID;
-                default:
-                    return 0;
-                }
+                printf("0x80 Reading ID from bank %d, will return %x\n", get_bank(s), (get_bank(s) < NAND_NUM_BANKS_INSTALLED ? NAND_CHIP_ID : 0));
+                if(get_bank(s) < NAND_NUM_BANKS_INSTALLED) return NAND_CHIP_ID;
+                else return 0;
             }
             return 0xdeadbeef;
         case NAND_FMCSTAT:
@@ -336,6 +355,7 @@ static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned siz
             s->cmd = val;
             break;
         case NAND_FMDNUM:
+            printf("NAND_FMDNUM Written! 0x%08x\n", val);
             if(val == NAND_BYTES_PER_SPARE - 1) {
                 s->reading_spare = 1;
             } else {
@@ -435,6 +455,13 @@ static void nand_init(Object *obj) {
     s->nand_banks[1] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank1.bin");
     s->nand_banks[2] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank2.bin");
     s->nand_banks[3] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank3.bin");
+
+    s->nand_spares = (cow_file**) malloc(sizeof(cow_file*) * NAND_NUM_BANKS);
+    s->nand_spares[0] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank0-spare.bin");
+    s->nand_spares[1] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank1-spare.bin");
+    s->nand_spares[2] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank2-spare.bin");
+    s->nand_spares[3] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank3-spare.bin");
+    memset(s->spare_buffer, 0xff, 3*sizeof(uint32_t));
 
     qemu_mutex_init(&s->lock);
 }

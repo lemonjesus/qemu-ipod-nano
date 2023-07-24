@@ -87,6 +87,9 @@ typedef struct NandState {
 
     char *nand_path;
     cow_file** nand_banks;
+    cow_file** nand_spares;
+
+    uint32_t spare_buffer[3];
 
     MemoryRegion *sysmem;
     MemoryRegion *downstream;
