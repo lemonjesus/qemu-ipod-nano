@@ -50,7 +50,7 @@ static void ipod_nano3g_sysic_write(void *opaque, hwaddr addr, uint64_t val, uns
 
     switch (addr) {
         case POWER_ONCTRL:
-            if((val & 0x20) != 0 || (val & 0x4) != 0 || (val & POWER_ID_ADM) != 0) { break; } // make sure that we do not record the 'on' state of some devices so it appears like they are turned on immediately.
+            if((val & 0x20) != 0 || (val & 0x4) != 0 || (val & POWER_ID_NAND) != 0) { break; } // make sure that we do not record the 'on' state of some devices so it appears like they are turned on immediately.
             s->power_state = val;
             break;
         case POWER_OFFCTRL:

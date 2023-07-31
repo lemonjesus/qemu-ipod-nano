@@ -75,7 +75,11 @@ typedef struct NandState {
     qemu_irq irq;
 
     uint8_t *page_buffer;
-    uint8_t *page_spare_buffer;
+    union {
+        uint8_t* bytes;
+        uint32_t* words;
+    } page_spare_buffer;
+
     uint32_t buffered_bank;
     uint32_t buffered_page;
     bool reading_multiple_pages;
@@ -88,8 +92,6 @@ typedef struct NandState {
     char *nand_path;
     cow_file** nand_banks;
     cow_file** nand_spares;
-
-    uint32_t spare_buffer[3];
 
     MemoryRegion *sysmem;
     MemoryRegion *downstream;

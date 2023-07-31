@@ -2,8 +2,11 @@
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
 
-#define ENABLE_FMISS_DEBUG 1
+#define ENABLE_FMISS_DEBUG 0
 #define FMISS_DEBUG if (ENABLE_FMISS_DEBUG) printf
+
+#define ENABLE_NAND_DEBUG 0
+#define NAND_DEBUG if (ENABLE_NAND_DEBUG) printf
 
 static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size);
 static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
@@ -163,27 +166,17 @@ static bool fmiss_vm_step(void *opaque, fmiss_vm *vm) {
 }
 
 static void fmiss_vm_execute(void *opaque, fmiss_vm *vm) {
-    printf("fmiss_vm: starting execution at %08lx...\n", vm->start_pc);
+    NAND_DEBUG("fmiss_vm: starting execution at %08lx...\n", vm->start_pc);
     while (fmiss_vm_step(opaque, vm)) {
     }
-    printf("fmiss_vm: done executing\n");
+    NAND_DEBUG("fmiss_vm: done executing\n");
 }
 
 static int get_bank(NandState *s) {
     uint32_t bank = __builtin_ctz(s->fmctrl0 >> 1);
-    printf("fmctrl0: 0x%08x (bank %d selected)\n", s->fmctrl0, bank);
+    NAND_DEBUG("fmctrl0: 0x%08x (bank %d selected)\n", s->fmctrl0, bank);
     if(bank > 7) return -1;
     return bank;
-}
-
-static void set_bank(NandState *s, uint32_t activate_bank) {
-    for(int bank = 0; bank < 8; bank++) {
-        // clear bit, toggle if it is active
-        s->fmctrl0 &= ~(1 << (bank + 1));
-        if(bank == activate_bank) {
-            s->fmctrl0 ^= 1 << (bank + 1);
-        }
-    }
 }
 
 void nand_set_buffered_page(NandState *s, uint32_t page) {
@@ -193,24 +186,11 @@ void nand_set_buffered_page(NandState *s, uint32_t page) {
     }
 
     if(bank != s->buffered_bank || page != s->buffered_page) {
-        // refresh the buffered page
-        //uint32_t vpn = page * 8 + bank;
-        char filename[200];
-        sprintf(filename, "%s/bank%d/%d.page", s->nand_path, bank, page);
-        struct stat st = {0};
-        if (stat(filename, &st) == -1) {
-            // page storage does not exist - initialize an empty buffer
-            memset(s->page_buffer, 0, NAND_BYTES_PER_PAGE);
-            memset(s->page_spare_buffer, 0, NAND_BYTES_PER_SPARE);
-            s->page_spare_buffer[0xA] = 0xFF; // make sure we add the FTL mark to an empty page
-        }
-        else {
-            FILE *f = fopen(filename, "rb");
-            if (f == NULL) { hw_error("Unable to read file!"); }
-            fread(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-            fread(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
-            fclose(f);
-        }
+        // read the data
+        cow_read(s->nand_banks[get_bank(s)], s->page_buffer, page * NAND_BYTES_PER_PAGE, NAND_BYTES_PER_PAGE);
+
+        // read the spare data
+        cow_read(s->nand_spares[get_bank(s)], s->page_spare_buffer.bytes, page * 16, 12);
 
         s->buffered_page = page;
         s->buffered_bank = bank;
@@ -220,10 +200,7 @@ void nand_set_buffered_page(NandState *s, uint32_t page) {
 
 static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
     NandState *s = (NandState *) opaque;
-    //printf("%s(%08lx)...\n", __func__, addr);
-    if(s->reading_multiple_pages) {
-        fprintf(stderr, "%s: reading from 0x%08lx\n", __func__, addr);
-    }
+    NAND_DEBUG("%s(%08lx)...\n", __func__, addr);
 
     if (addr >= FMI_DMEM && addr < (FMI_DMEM+4*FMIVSS_DMEM_SIZE)) {
         uint32_t i = (addr - FMI_DMEM)/4;
@@ -232,68 +209,35 @@ static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
 
     switch (addr) {
         case NAND_FMCTRL0:
-            printf("Reading from FMCTRL0: %08X\n", s->fmctrl0);
+            NAND_DEBUG("Reading from FMCTRL0: %08X\n", s->fmctrl0);
             return s->fmctrl0;
         case NAND_FMCTRL1:
             return s->fmctrl1;
         case NAND_FMFIFO:
-            printf("Reading from FMFIFO, cmd: %02x\n", s->cmd);
-            if(s->cmd == NAND_CMD_ID) {
-                printf("FIFO Reading ID from bank %d, will return %x\n", get_bank(s), (get_bank(s) < NAND_NUM_BANKS_INSTALLED ? NAND_CHIP_ID : 0));
-                if(get_bank(s) < NAND_NUM_BANKS_INSTALLED) return NAND_CHIP_ID;
-                else return 0;
-            }
-            else if(s->cmd == NAND_CMD_READSTATUS) {
+            NAND_DEBUG("Reading from FMFIFO, cmd: %02x\n", s->cmd);
+            if(s->cmd == NAND_CMD_READSTATUS) {
                 return (1 << 6);
             }
             else {
-                printf("Reading from FMFIFO while not in ID or READSTATUS mode!\n");
-                uint32_t read_val = 0;
-                if(s->reading_multiple_pages) {
-                    printf("Reading multiple pages, fmdnum: %d\n", s->fmdnum);
-                    // which bank are we at?
-                    if(s->fmdnum % 0x800 == 0) {
-                        s->cur_bank_reading += 1;
-                        printf("WILL TURN TO BANK %d (cnt: %d)\n", s->cur_bank_reading, s->fmdnum);
-                        set_bank(s, s->banks_to_read[s->cur_bank_reading]);
-                    }
+                uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
+                NAND_DEBUG("Reading bank %d page 0x%X to 0x%08X, fmctrl0: %x\n", get_bank(s), page, s->destaddr, s->fmctrl0);
+                nand_set_buffered_page(s, page);
+                address_space_write(s->downstream_as, s->destaddr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, s->page_buffer, NAND_BYTES_PER_PAGE);
 
-                    // compute the offset in the page
-                    uint32_t page_offset = s->fmdnum % 0x800;
-                    if(page_offset == 0) { page_offset = 0x800; }
-                    nand_set_buffered_page(s, s->pages_to_read[s->cur_bank_reading]);
-                    printf("Reading bank %d page %d\n", get_bank(s), s->pages_to_read[s->cur_bank_reading]);
-                    read_val = ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - page_offset) / 4];
-                    printf("FMDNUM: %d, offset: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - page_offset) / 4);
-                    printf("Page offset: %d, bytes: 0x%08x\n", page_offset, read_val);
-                } else {
-                    uint32_t page = (s->fmaddr1 << 16) | (s->fmaddr0 >> 16);
-                    nand_set_buffered_page(s, page);
-                    printf("Reading bank %d page 0x%X to 0x%08X, fmctrl0: %x\n", get_bank(s), page, s->destaddr, s->fmctrl0);
-
-                    // read the data
-                    void* buffer = malloc(NAND_BYTES_PER_PAGE);
-                    cow_read(s->nand_banks[get_bank(s)], buffer, page * NAND_BYTES_PER_PAGE, NAND_BYTES_PER_PAGE);
-                    address_space_write(s->downstream_as, s->destaddr ^ 0x80000000, MEMTXATTRS_UNSPECIFIED, buffer, NAND_BYTES_PER_PAGE);
-                    free(buffer);
-
-                    // read the spare data
-                    cow_read(s->nand_spares[get_bank(s)], s->spare_buffer, page * 16, 12);
-                }
-                s->fmdnum -= 4;
-                printf("FIFO[0] read: 0x%08x\n", s->spare_buffer[0]);
-                return s->spare_buffer[0];
+                // read the spare data
+                NAND_DEBUG("FIFO[0] read: 0x%08x\n", s->page_spare_buffer.words[0]);
+                return s->page_spare_buffer.words[0];
             }
         case 0x64:
-            printf("FIFO[1] read: 0x%08x\n", s->spare_buffer[1]);
-            return s->spare_buffer[1]; // "reserved" field in the VFLSpare struct
+            NAND_DEBUG("FIFO[1] read: 0x%08x\n", s->page_spare_buffer.words[1]);
+            return s->page_spare_buffer.words[1]; // "reserved" field in the VFLSpare struct
         case 0x68:
-            printf("FIFO[2] read: 0x%08x\n", s->spare_buffer[2]);
-            return s->spare_buffer[2]; // third byte is the VFLSpare Sparetype (0x80 for now), the fourth byte is the StatusMark. the other two bytes are unused.
+            NAND_DEBUG("FIFO[2] read: 0x%08x\n", s->page_spare_buffer.words[2]);
+            return s->page_spare_buffer.words[2]; // third byte is the VFLSpare Sparetype (0x80 for now), the fourth byte is the StatusMark. the other two bytes are unused.
 
         case 0x80:
             if (s->cmd == NAND_CMD_ID) {
-                printf("0x80 Reading ID from bank %d, will return %x\n", get_bank(s), (get_bank(s) < NAND_NUM_BANKS_INSTALLED ? NAND_CHIP_ID : 0));
+                NAND_DEBUG("0x80 Reading ID from bank %d, will return %x\n", get_bank(s), (get_bank(s) < NAND_NUM_BANKS_INSTALLED ? NAND_CHIP_ID : 0));
                 if(get_bank(s) < NAND_NUM_BANKS_INSTALLED) return NAND_CHIP_ID;
                 else return 0;
             }
@@ -305,27 +249,35 @@ static uint64_t nand_mem_read(void *opaque, hwaddr addr, unsigned size) {
         case FMI_PROGRAM:
             return s->fmi_program;
         case FMI_INT:
-            printf("FMI_INT: 0x%08x\n", s->fmi_int);
+            NAND_DEBUG("FMI_INT: 0x%08x\n", s->fmi_int);
             return s->fmi_int;
         case FMI_START:
             return 0;
         // case 0xC18 ... 0xC34:
         //     return s->fmiss_vm.regs[(addr - 0xC18) / 4];
+        case 0xC30:
+            // if the page is all 0xFF, then we need to return 0x2000
+            for(uint32_t i = 0; i < 12; i++) {
+                if(s->page_spare_buffer.bytes[i] != 0xFF) {
+                    NAND_DEBUG("reading 0xC30: spare of page 0x%X is not all 0xFF, returning 0\n", s->buffered_page);
+                    return 0;
+                }
+            }
+
+            NAND_DEBUG("reading 0xC30: spare of page 0x%X is all 0xFF, returning ECC_ALL_FF\n", s->buffered_page);
+            return 0x20000000;
         case 0xc64:
             return 1;
         default:
             break;
     }
-    printf("defaulting %X to 0\n", addr);
+    NAND_DEBUG("defaulting %X to 0\n", addr);
     return 0;
 }
 
 static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
-    printf("%s(%08lx, %08lx)...\n", __func__, addr, val);
+    NAND_DEBUG("%s(%08lx, %08lx)...\n", __func__, addr, val);
     NandState *s = (NandState *) opaque;
-    if(s->reading_multiple_pages) {
-        fprintf(stderr, "%s: writing 0x%08lx to 0x%08lx\n", __func__, val, addr);
-    }
 
     if (addr >= FMI_DMEM && addr < (FMI_DMEM+4*FMIVSS_DMEM_SIZE)) {
         uint32_t i = (addr - FMI_DMEM)/4;
@@ -336,11 +288,11 @@ static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned siz
     switch(addr) {
         case NAND_FMCTRL0:
             s->fmctrl0 = val;
-            printf("NAND_FMCTRL0: 0x%08x\n", s->fmctrl0);
+            NAND_DEBUG("NAND_FMCTRL0: 0x%08x\n", s->fmctrl0);
             break;
         case NAND_FMCTRL1:
             s->fmctrl1 = val | (1<<30);
-            printf("NAND_FMCTRL1: 0x%08x\n", s->fmctrl1);
+            NAND_DEBUG("NAND_FMCTRL1: 0x%08x\n", s->fmctrl1);
             break;
         case NAND_FMADDR0:
             s->fmaddr0 = val;
@@ -355,7 +307,7 @@ static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned siz
             s->cmd = val;
             break;
         case NAND_FMDNUM:
-            printf("NAND_FMDNUM Written! 0x%08x\n", val);
+            NAND_DEBUG("NAND_FMDNUM Written! 0x%08x\n", val);
             if(val == NAND_BYTES_PER_SPARE - 1) {
                 s->reading_spare = 1;
             } else {
@@ -365,11 +317,11 @@ static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned siz
             break;
         case NAND_FMFIFO:
             if(!s->is_writing) {
-                // printf("%s: NAND_FMFIFO writing while not in writing mode!\n", __func__);
+                // NAND_DEBUG("%s: NAND_FMFIFO writing while not in writing mode!\n", __func__);
                 return;
             }
 
-            //printf("Setting offset %d: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - s->fmdnum) / 4);
+            //NAND_DEBUG("Setting offset %d: %d\n", s->fmdnum, (NAND_BYTES_PER_PAGE - s->fmdnum) / 4);
             ((uint32_t *)s->page_buffer)[(NAND_BYTES_PER_PAGE - s->fmdnum) / 4] = val;
             s->fmdnum -= 4;
 
@@ -379,7 +331,7 @@ static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned siz
 
                 // flush the page buffer to the disk
                 //uint32_t vpn = s->buffered_page * 8 + s->buffered_bank;
-                //printf("Flushing page %d, bank %d, vpn %d\n", s->buffered_page, s->buffered_bank, vpn);
+                //NAND_DEBUG("Flushing page %d, bank %d, vpn %d\n", s->buffered_page, s->buffered_bank, vpn);
                 qemu_mutex_lock(&s->lock);
                 qemu_mutex_unlock(&s->lock);
                 {
@@ -387,24 +339,24 @@ static void nand_mem_write(void *opaque, hwaddr addr, uint64_t val, unsigned siz
                     sprintf(filename, "%s/bank%d/%d_new.page", s->nand_path, s->buffered_bank, s->buffered_page);
                     FILE *f = fopen(filename, "wb");
                     if (f == NULL) { hw_error("Unable to read file!"); }
-                    fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
-                    fwrite(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
+                    // fwrite(s->page_buffer, sizeof(char), NAND_BYTES_PER_PAGE, f);
+                    // fwrite(s->page_spare_buffer, sizeof(char), NAND_BYTES_PER_SPARE, f);
                     fclose(f);
                 }
             }
             break;
         case NAND_DESTADDR:
             s->destaddr = val;
-            printf("DESTADDR SET, DUMP OF STATE: \n");
-            printf("fmctrl0: 0x%08x\n", s->fmctrl0);
-            printf("fmctrl1: 0x%08x\n", s->fmctrl1);
-            printf("fmaddr0: 0x%08x\n", s->fmaddr0);
-            printf("fmaddr1: 0x%08x\n", s->fmaddr1);
-            printf("fmanum: 0x%08x\n", s->fmanum);
-            printf("cmd: 0x%08x\n", s->cmd);
-            printf("fmdnum: 0x%08x\n", s->fmdnum);
-            printf("destaddr: 0x%08x\n", s->destaddr);
-            printf("rsctrl: 0x%08x\n", s->rsctrl);
+            NAND_DEBUG("DESTADDR SET, DUMP OF STATE: \n");
+            NAND_DEBUG("fmctrl0: 0x%08x\n", s->fmctrl0);
+            NAND_DEBUG("fmctrl1: 0x%08x\n", s->fmctrl1);
+            NAND_DEBUG("fmaddr0: 0x%08x\n", s->fmaddr0);
+            NAND_DEBUG("fmaddr1: 0x%08x\n", s->fmaddr1);
+            NAND_DEBUG("fmanum: 0x%08x\n", s->fmanum);
+            NAND_DEBUG("cmd: 0x%08x\n", s->cmd);
+            NAND_DEBUG("fmdnum: 0x%08x\n", s->fmdnum);
+            NAND_DEBUG("destaddr: 0x%08x\n", s->destaddr);
+            NAND_DEBUG("rsctrl: 0x%08x\n", s->rsctrl);
             break;
         case NAND_RSCTRL:
             s->rsctrl = val;
@@ -444,12 +396,14 @@ static void nand_init(Object *obj) {
     sysbus_init_irq(sbd, &s->irq);
 
     s->page_buffer = (uint8_t *)malloc(NAND_BYTES_PER_PAGE);
-    s->page_spare_buffer = (uint8_t *)malloc(NAND_BYTES_PER_SPARE);
+    s->page_spare_buffer.bytes = (uint8_t *)malloc(NAND_BYTES_PER_SPARE);
+    memset(s->page_spare_buffer.bytes, 0xff, NAND_BYTES_PER_SPARE);
     s->buffered_page = -1;
     s->buffered_bank = -1;
 
     fmiss_vm_reset(&s->fmiss_vm, 0);
 
+    // TODO: pass this in through a command line argument
     s->nand_banks = (cow_file**) malloc(sizeof(cow_file*) * NAND_NUM_BANKS);
     s->nand_banks[0] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank0.bin");
     s->nand_banks[1] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank1.bin");
@@ -461,7 +415,6 @@ static void nand_init(Object *obj) {
     s->nand_spares[1] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank1-spare.bin");
     s->nand_spares[2] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank2-spare.bin");
     s->nand_spares[3] = cow_open("/mnt/hgfs/ipodmemory/nand-dump-bank3-spare.bin");
-    memset(s->spare_buffer, 0xff, 3*sizeof(uint32_t));
 
     qemu_mutex_init(&s->lock);
 }
@@ -481,6 +434,8 @@ static void nand_reset(DeviceState *d) {
     s->fmi_int = 0;
     s->reading_spare = 0;
     s->buffered_page = -1;
+
+    fmiss_vm_reset(&s->fmiss_vm, 0);
 }
 
 static void nand_class_init(ObjectClass *oc, void *data) {

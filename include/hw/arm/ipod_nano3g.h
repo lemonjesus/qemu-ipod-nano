@@ -17,7 +17,6 @@
 #include "hw/arm/ipod_nano3g_nand.h"
 #include "hw/arm/ipod_nano3g_nand_ecc.h"
 #include "hw/arm/ipod_nano3g_pcf50633_pmu.h"
-#include "hw/arm/ipod_nano3g_adm.h"
 #include "hw/arm/ipod_nano3g_sysic.h"
 #include "hw/arm/ipod_nano3g_chipid.h"
 #include "hw/arm/ipod_nano3g_tvout.h"
@@ -110,7 +109,6 @@ const int S5L8702_GPIO_IRQS[7] = { S5L8702_GPIO_G0_IRQ, S5L8702_GPIO_G1_IRQ, S5L
 #define UART2_MEM_BASE 0x3CC08000
 #define UART3_MEM_BASE 0x3CC0C000
 #define UART4_MEM_BASE 0x3CC10000
-#define ADM_MEM_BASE 0x38800000
 #define MBX_MEM_BASE 0x3B000000
 #define ENGINE_8702_MEM_BASE 0x3F000000
 #define KERNELCACHE_BASE 0x9000000
@@ -155,7 +153,6 @@ typedef struct {
 	NandECCState *nand_ecc_state;
 	IPodNano3GI2CState *i2c0_state;
 	IPodNano3GI2CState *i2c1_state;
-	IPodNano3GADMState *adm_state;
 	IPodNano3GChipIDState *chipid_state;
 	IPodNano3GTVOutState *tvout1_state;
 	IPodNano3GTVOutState *tvout2_state;

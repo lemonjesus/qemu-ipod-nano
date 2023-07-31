@@ -43,12 +43,6 @@ break *0x9f022c0
 
 skip function efi_DxeMain_CoreLocateProtocol ()
 
-# nand_VFL_Read
-break *0x9e8dd88
-break *0x9e8ddc0
-
-break *0x9e94264
-
 continue
 
 # table of contents of known global variables

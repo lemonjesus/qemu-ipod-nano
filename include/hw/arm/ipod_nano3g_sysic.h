@@ -16,7 +16,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodNano3GSYSICState, IPOD_NANO3G_SYSIC)
 #define POWER_SETSTATE 0x8
 #define POWER_STATE 0x14 // seems to be toggled by writing a 1 to the right device ID - cleared to 0 when the device has started.
 
-#define POWER_ID_ADM 0x10
+#define POWER_ID_NAND 0x10
 
 // the GPIO IC is part of the system controller
 #define GPIO_INTLEVEL 0x80

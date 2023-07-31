@@ -590,17 +590,6 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     sysbus_connect_irq(busdev, 0, S5L8702_get_irq(nms, S5L8702_I2C1_IRQ));
     memory_region_add_subregion(sysmem, I2C1_MEM_BASE, &i2c_state->iomem);
 
-    // // init the ADM
-    // dev = qdev_new("ipodnano3g.adm");
-    // IPodNano3GADMState *adm_state = IPOD_NANO3G_ADM(dev);
-    // adm_state->nand_state = nand_state;
-    // nms->adm_state = adm_state;
-    // object_property_set_link(OBJECT(dev), "downstream", OBJECT(sysmem), &error_fatal);
-    // busdev = SYS_BUS_DEVICE(dev);
-    // sysbus_realize(busdev, &error_fatal);
-    // sysbus_connect_irq(busdev, 0, S5L8702_get_irq(nms, S5L8702_NAND_IRQ));
-    // memory_region_add_subregion(sysmem, ADM_MEM_BASE, &adm_state->iomem);
-
     // init JPEG engine
     dev = qdev_new("s5l8702jpeg");
     S5L8702JPEGState *jpeg_state = S5L8702JPEG(dev);
