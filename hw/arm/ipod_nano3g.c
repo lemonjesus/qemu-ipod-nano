@@ -310,43 +310,42 @@ static uint32_t S5L8702_usb_hwcfg[] = {
 
 static void ipod_nano3g_key_event(void *opaque, int keycode)
 {
-    bool do_irq = false;
-    int gpio_group = 0, gpio_selector = 0;
+    IPodNano3GGPIOState *s = (IPodNano3GGPIOState *)opaque;
 
-    IPodNano3GMultitouchState *s = (IPodNano3GMultitouchState *)opaque;
-    if(keycode == 25 || keycode == 153) {
-        // power button
-        gpio_group = GPIO_BUTTON_POWER_IRQ / NUM_GPIO_PINS;
-        gpio_selector = GPIO_BUTTON_POWER_IRQ % NUM_GPIO_PINS;
-        
-        if(keycode == 25 && (s->gpio_state->gpio_state & (1 << (GPIO_BUTTON_POWER & 0xf))) == 0) {
-            s->gpio_state->gpio_state |= (1 << (GPIO_BUTTON_POWER & 0xf));
-            do_irq = true;
-        }
-        else if(keycode == 153) {
-            s->gpio_state->gpio_state &= ~(1 << (GPIO_BUTTON_POWER & 0xf));
-            do_irq = true;
-        }
-    }
-    else if(keycode == 35 || keycode == 163) {
-        // home button
-        gpio_group = GPIO_BUTTON_HOME_IRQ / NUM_GPIO_PINS;
-        gpio_selector = GPIO_BUTTON_HOME_IRQ % NUM_GPIO_PINS;
-
-        if(keycode == 35 && (s->gpio_state->gpio_state & (1 << (GPIO_BUTTON_HOME & 0xf))) == 0) {
-            s->gpio_state->gpio_state |= (1 << (GPIO_BUTTON_HOME & 0xf));
-            do_irq = true;
-        }
-        else if(keycode == 163) {
-            s->gpio_state->gpio_state &= ~(1 << (GPIO_BUTTON_HOME & 0xf));
-            do_irq = true;
-        }
-    }
-    
-    if(do_irq) {
-        s->sysic->gpio_int_status[gpio_group] |= (1 << gpio_selector);
-        qemu_irq_raise(s->sysic->gpio_irqs[gpio_group]);
-    }
+    switch(keycode) {
+        case 28:
+            s->clickwheel_select_pressed = 1;
+            break;
+        case 156:
+            s->clickwheel_select_pressed = 0;
+            break;
+        case 72:
+            s->clickwheel_menu_pressed = 1;
+            break;
+        case 200:
+            s->clickwheel_menu_pressed = 0;
+            break;
+        case 80:
+            s->clickwheel_play_pressed = 1;
+            break;
+        case 208:
+            s->clickwheel_play_pressed = 0;
+            break;
+        case 75:
+            s->clickwheel_prev_pressed = 1;
+            break;
+        case 203:
+            s->clickwheel_prev_pressed = 0;
+            break;
+        case 77:
+            s->clickwheel_next_pressed = 1;
+            break;
+        case 205:
+            s->clickwheel_next_pressed = 0;
+            break;
+        default:
+            break;
+    }    
 }
 
 static void ipod_nano3g_machine_init(MachineState *machine)
@@ -425,6 +424,9 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     // init GPIO
     dev = qdev_new("ipodnano3g.gpio");
     IPodNano3GGPIOState *gpio_state = IPOD_NANO3G_GPIO(dev);
+    // TODO: the initial state is forced into the key combo for diagnostic mode since that's the easiest binary to enter from EFI.
+    gpio_state->clickwheel_select_pressed = 1;
+    gpio_state->clickwheel_prev_pressed = 1;
     nms->gpio_state = gpio_state;
     memory_region_add_subregion(sysmem, GPIO_MEM_BASE, &gpio_state->iomem);
 
@@ -474,12 +476,8 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     sysbus_create_simple("S5L8702spi", SPI1_MEM_BASE, S5L8702_get_irq(nms, S5L8702_SPI1_IRQ));
 
     set_spi_base(2);
-    dev = sysbus_create_simple("S5L8702spi", SPI2_MEM_BASE, S5L8702_get_irq(nms, S5L8702_SPI2_IRQ));
-    S5L8702SPIState *spi2_state = S5L8702SPI(dev);
-    spi2_state->mt->sysic = sysic_state;
-    spi2_state->mt->gpio_state = gpio_state;
-    nms->spi2_state = spi2_state;
-
+    sysbus_create_simple("S5L8702spi", SPI2_MEM_BASE, S5L8702_get_irq(nms, S5L8702_SPI2_IRQ));
+    
     ipod_nano3g_memory_setup(machine, sysmem, nsas);
 
     // init LCD
@@ -487,7 +485,6 @@ static void ipod_nano3g_machine_init(MachineState *machine)
     IPodNano3GLCDState *lcd_state = IPOD_NANO3G_LCD(dev);
     lcd_state->sysmem = sysmem;
     lcd_state->nsas = nsas;
-    lcd_state->mt = spi2_state->mt;
     nms->lcd_state = lcd_state;
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_connect_irq(busdev, 0, S5L8702_get_irq(nms, S5L8702_LCD_IRQ));
@@ -640,7 +637,7 @@ static void ipod_nano3g_machine_init(MachineState *machine)
 
     qemu_register_reset(ipod_nano3g_cpu_reset, nms);
 
-    qemu_add_kbd_event_handler(ipod_nano3g_key_event, spi2_state->mt);
+    qemu_add_kbd_event_handler(ipod_nano3g_key_event, nms->gpio_state);
 }
 
 static void ipod_nano3g_machine_class_init(ObjectClass *obj, void *data)

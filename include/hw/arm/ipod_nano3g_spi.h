@@ -10,7 +10,6 @@
 #include "hw/irq.h"
 #include "hw/ssi/ssi.h"
 #include "hw/arm/ipod_nano3g_lcd_panel.h"
-#include "hw/arm/ipod_nano3g_multitouch.h"
 #include "hw/arm/ipod_nano3g_nor_spi.h"
 
 #define TYPE_S5L8702SPI "S5L8702spi"
@@ -69,7 +68,6 @@ typedef struct S5L8702SPIState {
 
     MemoryRegion iomem;
     SSIBus *spi;
-    IPodNano3GMultitouchState *mt;
 
     qemu_irq irq;
     uint32_t last_irq;

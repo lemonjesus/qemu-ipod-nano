@@ -218,24 +218,8 @@ static const GraphicHwOps S5L8702_gfx_ops = {
 
 static void ipod_nano3g_lcd_mouse_event(void *opaque, int x, int y, int z, int buttons_state)
 {
-    //printf("CLICKY %d %d %d %d\n", x, y, z, buttons_state);
-
-    // convert x and y to fractional numbers
-    float fx = x / pow(2, 15);
-    float fy = 1 - y / pow(2, 15);
-
-    IPodNano3GLCDState *lcd = (IPodNano3GLCDState *) opaque;
-    lcd->mt->prev_touch_x = lcd->mt->touch_x;
-    lcd->mt->prev_touch_y = lcd->mt->touch_y;
-    lcd->mt->touch_x = fx;
-    lcd->mt->touch_y = fy;
-
-    if(buttons_state && !lcd->mt->touch_down) {
-        ipod_nano3g_multitouch_on_touch(lcd->mt);
-    }
-    else if(!buttons_state && lcd->mt->touch_down) {
-        ipod_nano3g_multitouch_on_release(lcd->mt);
-    }
+    // TODO: maybe use this in the future for the non-button part of the clickwheel?
+    // printf("CLICKY %d %d %d %d\n", x, y, z, buttons_state);
 }
 
 static void refresh_timer_tick(void *opaque)

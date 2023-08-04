@@ -43,6 +43,9 @@ break *0x9f022c0
 
 skip function efi_DxeMain_CoreLocateProtocol ()
 
+# bds entry
+break *0x9f06934
+
 continue
 
 # table of contents of known global variables

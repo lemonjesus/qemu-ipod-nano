@@ -311,12 +311,7 @@ static void S5L8702_spi_realize(DeviceState *dev, struct Error **errp)
             ssi_create_peripheral(s->spi, TYPE_IPOD_NANO3G_LCD_PANEL);
             break;
         case 2:
-        {
-            DeviceState *dev = ssi_create_peripheral(s->spi, TYPE_IPOD_NANO3G_MULTITOUCH);
-            IPodNano3GMultitouchState *mt = IPOD_NANO3G_MULTITOUCH(dev);
-            s->mt = mt;
             break;
-        }
     }
 }
 

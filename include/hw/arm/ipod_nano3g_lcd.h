@@ -8,7 +8,6 @@
 #include "qemu/timer.h"
 #include "hw/sysbus.h"
 #include "hw/irq.h"
-#include "hw/arm/ipod_nano3g_multitouch.h"
 
 #define TYPE_IPOD_NANO3G_LCD                "ipodnano3g.lcd"
 OBJECT_DECLARE_SIMPLE_TYPE(IPodNano3GLCDState, IPOD_NANO3G_LCD)
@@ -32,7 +31,6 @@ typedef struct IPodNano3GLCDState
     MemoryRegion iomem;
     QemuConsole *con;
     AddressSpace *nsas;
-    IPodNano3GMultitouchState *mt;
     int invalidate;
     MemoryRegionSection fbsection;
     qemu_irq irq;
