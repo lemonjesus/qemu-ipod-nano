@@ -8,12 +8,15 @@ Before I started this, I started a more bespoke emulator based on Unicorn. [Chec
 
 ## What works
 
+* The CPU, complete with system timers and interrupts
 * SPI NOR flash
 * I2C communications probably work, but the PMU is currently a dummy device
 * The LCD screen
 * Hardware JPEG decoding (it's good enough for now, but it isn't perfect)
+* Basic clickwheel buttons
+* NAND... kind of. It makes it through the initialization process, but that means the entire FMISS VM instruction set is basically proved to be correct.
 
-Currently, the iPod Nano 3G emulator is able to boot partially into the EFI. At some point, it decides it can't actually boot, so it displays the Red X image.
+Currently, the iPod Nano 3G emulator is able to boot partially all the way through the EFI bootloader. The BDS module decides to try and load Disk Mode for some reason, presumably because it can't load the OS (as far as I can tell, it doesn't even try?) My current goal is to get into the Diagnostic Menu because that's the simplest binary to load that proves that the base iPod is working.
 
 Below this, the README is a work in progress.
 
