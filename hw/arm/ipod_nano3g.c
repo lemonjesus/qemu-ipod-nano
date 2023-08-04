@@ -146,26 +146,18 @@ static const MemoryRegionOps usb_phys_ops = {
 /*
 MBX
 */
-static uint64_t S5L8702_mbx_read(void *opaque, hwaddr addr, unsigned size)
-{
-    //fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
-    switch(addr)
-    {
-        case 0x12c:
-            return 0x100;
-        case 0xf00:
-            return (1 << 0x18) | 0x10000; // seems to be some kind of identifier
-        case 0x1020:
-            return 0x10000;
-        default:
-            break;
-    }
-    return 0;
+static uint64_t S5L8702_mbx_read(void *opaque, hwaddr addr, unsigned size) {
+    AddressSpace *nsas = (AddressSpace *)opaque;
+    // fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
+    uint64_t val = 0;
+    address_space_read(nsas, addr - 0x80000000, MEMTXATTRS_UNSPECIFIED, &val, size);
+    return val;
 }
 
-static void S5L8702_mbx_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
-{
-    //fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
+static void S5L8702_mbx_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
+    AddressSpace *nsas = (AddressSpace *)opaque;
+    address_space_write(nsas, addr - 0x80000000, MEMTXATTRS_UNSPECIFIED, &val, size);
+    // fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
     // do nothing
 }
 
@@ -181,8 +173,15 @@ static void ipod_nano3g_memory_setup(MachineState *machine, MemoryRegion *sysmem
 
     allocate_ram(sysmem, "sram1", SRAM1_MEM_BASE, 0x10000);
 
-    // allocate UART ram
-    allocate_ram(sysmem, "ram", RAM_MEM_BASE, 0x8000000);
+    // allocate ram
+    MemoryRegion *sec = g_new(MemoryRegion, 1);
+    memory_region_init_ram(sec, NULL, "ram", 0x2000000, &error_fatal);
+    memory_region_add_subregion(sysmem, RAM_MEM_BASE, sec);
+
+    MemoryRegion *iomem = g_new(MemoryRegion, 1);
+    memory_region_init_io(iomem, NULL, &mbx_ops, nsas, "himem", 0x2000000);
+    memory_region_add_subregion(sysmem, 0x88000000, iomem);
+    
 
     // load the bootrom
     uint8_t *file_data = NULL;
