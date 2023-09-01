@@ -13,6 +13,10 @@ echo "ODcwMjEuMAEAAAAAAPgBAJ9gIH4eKfJNUWHFtupCLKsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 # step 2: put the decrypted efi at 0x8800
 dd if=$2 of=$4 bs=1 seek=$((0x8800)) conv=notrunc
 
+# step x: patch out a part of diag that does some hardware init stuff that the emulator doesn't like... yet
+cp 0x0009E140.diagflsh.bin tstdiag.bin
+dd if=/dev/zero of=$3/tstdiag.bin bs=1 count=4 seek=$((0x1452c)) conv=notrunc
+
 # step 3: fix the JPEGs and binaries so they're not encrypted any more
 
 # step 3a: write the decrypted files to the NOR flash image
@@ -21,7 +25,7 @@ dd if=$3/0x000954E0.bdhwflsh.jpg of=$4 bs=1 seek=$((0x954E0 + 0x200)) conv=notru
 dd if=$3/0x000978E0.bdswflsh.jpg of=$4 bs=1 seek=$((0x978E0 + 0x200)) conv=notrunc
 dd if=$3/0x0009AB30.lbatflsh.jpg of=$4 bs=1 seek=$((0x9AB30 + 0x200)) conv=notrunc
 dd if=$3/0x0009CCC0.applflsh.jpg of=$4 bs=1 seek=$((0x9CCC0 + 0x200)) conv=notrunc
-dd if=$3/0x0009E140.diagflsh.bin of=$4 bs=1 seek=$((0x9E140 + 0x200)) conv=notrunc
+dd if=$3/tstdiag.bin of=$4 bs=1 seek=$((0x9E140 + 0x200)) conv=notrunc
 
 # step 3b: write the sha1sums to the headers
 sha1sum 0x000930E0.chrgflsh.jpg | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$((0x930E0 + 0x1C)) conv=notrunc
@@ -29,7 +33,7 @@ sha1sum 0x000954E0.bdhwflsh.jpg | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$(
 sha1sum 0x000978E0.bdswflsh.jpg | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$((0x978E0 + 0x1C)) conv=notrunc
 sha1sum 0x0009AB30.lbatflsh.jpg | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$((0x9AB30 + 0x1C)) conv=notrunc
 sha1sum 0x0009CCC0.applflsh.jpg | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$((0x9CCC0 + 0x1C)) conv=notrunc
-sha1sum 0x0009E140.diagflsh.bin | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$((0x9E140 + 0x1C)) conv=notrunc
+sha1sum tstdiag.bin | cut -c -40 | xxd -r -p | dd of=$4 bs=1 seek=$((0x9E140 + 0x1C)) conv=notrunc
 
 # step 3c: change the AES Key ID to 0x01 (the GID key which the emulator ignores)
 echo -n -e "\x01" | dd of=$4 bs=1 seek=$((0x930E0 + 0x8)) conv=notrunc

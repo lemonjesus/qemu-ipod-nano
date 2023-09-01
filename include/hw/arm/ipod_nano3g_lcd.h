@@ -52,6 +52,9 @@ typedef struct IPodNano3GLCDState
     uint16_t* framebuffer;
     uint64_t memcnt;
 
+    uint8_t address_latches;
+    uint16_t sc, ec, sp, ep;
+
     uint32_t unknown1;
     uint32_t unknown2;
 

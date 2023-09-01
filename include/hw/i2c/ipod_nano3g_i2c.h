@@ -20,6 +20,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(IPodNano3GI2CState, IPOD_NANO3G_I2C)
 #define IICUNK14      0x14
 #define IICUNK18      0x18
 #define IICREG20	  0x20
+#define IICREG28      0x28
 
 #define SR_MODE       0x0       /* Slave Receive Mode */
 #define ST_MODE       0x1       /* Slave Transmit Mode */
@@ -55,7 +56,9 @@ typedef struct IPodNano3GI2CState {
     uint8_t address;
     uint8_t datashift;
     uint8_t line_ctrl;
+    uint8_t iicreg14;
 	uint32_t iicreg20;
+    uint8_t iicreg28;
 
 	uint8_t active;
 

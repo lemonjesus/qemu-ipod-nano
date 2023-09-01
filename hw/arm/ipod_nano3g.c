@@ -150,13 +150,15 @@ static uint64_t S5L8702_mbx_read(void *opaque, hwaddr addr, unsigned size) {
     AddressSpace *nsas = (AddressSpace *)opaque;
     // fprintf(stderr, "%s: read from location 0x%08x\n", __func__, addr);
     uint64_t val = 0;
-    address_space_read(nsas, addr - 0x80000000, MEMTXATTRS_UNSPECIFIED, &val, size);
+    // address_space_read(nsas, addr - 0x80000000, MEMTXATTRS_UNSPECIFIED, &val, size);
+    cpu_physical_memory_read(addr - 0x80000000, &val, size);
     return val;
 }
 
 static void S5L8702_mbx_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
     AddressSpace *nsas = (AddressSpace *)opaque;
-    address_space_write(nsas, addr - 0x80000000, MEMTXATTRS_UNSPECIFIED, &val, size);
+    // address_space_write(nsas, addr - 0x80000000, MEMTXATTRS_UNSPECIFIED, &val, size);
+    cpu_physical_memory_write(addr - 0x80000000, &val, size);
     // fprintf(stderr, "%s: writing 0x%08x to 0x%08x\n", __func__, val, addr);
     // do nothing
 }
@@ -179,7 +181,7 @@ static void ipod_nano3g_memory_setup(MachineState *machine, MemoryRegion *sysmem
     memory_region_add_subregion(sysmem, RAM_MEM_BASE, sec);
 
     MemoryRegion *iomem = g_new(MemoryRegion, 1);
-    memory_region_init_io(iomem, NULL, &mbx_ops, nsas, "himem", 0x2000000);
+    memory_region_init_alias(iomem, NULL, "himem", sec, 0, 0x2000000);
     memory_region_add_subregion(sysmem, 0x88000000, iomem);
     
 
@@ -313,33 +315,43 @@ static void ipod_nano3g_key_event(void *opaque, int keycode)
 
     switch(keycode) {
         case 28:
+            printf("select pressed\n");
             s->clickwheel_select_pressed = 1;
             break;
         case 156:
+            printf("select released\n");
             s->clickwheel_select_pressed = 0;
             break;
         case 72:
+            printf("menu pressed\n");
             s->clickwheel_menu_pressed = 1;
             break;
         case 200:
+            printf("menu released\n");
             s->clickwheel_menu_pressed = 0;
             break;
         case 80:
+            printf("play pressed\n");
             s->clickwheel_play_pressed = 1;
             break;
         case 208:
+            printf("play released\n");
             s->clickwheel_play_pressed = 0;
             break;
         case 75:
+            printf("prev pressed\n");
             s->clickwheel_prev_pressed = 1;
             break;
         case 203:
+            printf("prev released\n");
             s->clickwheel_prev_pressed = 0;
             break;
         case 77:
+            printf("next pressed\n");
             s->clickwheel_next_pressed = 1;
             break;
         case 205:
+            printf("next released\n");
             s->clickwheel_next_pressed = 0;
             break;
         default:

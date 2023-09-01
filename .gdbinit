@@ -12,6 +12,7 @@ target remote localhost:1234
 
 file /home/tucker/Development/qemu-ipod-nano/build/bootrom_symbols
 file /home/tucker/Development/qemu-ipod-nano/build/efi_adjusted_symbols
+file /home/tucker/Development/qemu-ipod-nano/build/diag_symbols
 
 # build the ipod-debug binary with -g to get various structs and global variables for a richer and more fulfilling debugging experience
 add-symbol-file /home/tucker/Development/qemu-ipod-nano/ipod/ipod-debug
@@ -35,7 +36,12 @@ define done
 end
 
 # break on a CPU exception
+break *0x04
+break *0x08
+break *0x0c
 break *0x10
+break *0x14
+# break *0x18
 break *0x9f022c0
 
 # first instruction of a module! maps to 40080242 efi_DxeMain_entrypoint in Ghidra, offset of 0x360C1000
@@ -43,11 +49,13 @@ break *0x9f022c0
 
 skip function efi_DxeMain_CoreLocateProtocol ()
 
-# bds entry
-break *0x9f06934
+# diag load
+# break *0x8007150
 
-break *0x9f063d8
-
+break *0x8014528
+# break *0x800fc64
+# break *0x800c624
+break *0x800640c
 continue
 
 # table of contents of known global variables

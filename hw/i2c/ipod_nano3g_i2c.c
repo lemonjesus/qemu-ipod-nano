@@ -58,36 +58,47 @@ static int S5L8702_i2c_send(IPodNano3GI2CState *s, uint8_t data)
 static uint64_t ipod_nano3g_i2c_read(void *opaque, hwaddr offset, unsigned size)
 {
     IPodNano3GI2CState *s = (IPodNano3GI2CState *)opaque;
-
-    // fprintf(stderr, "S5L8702_i2c_read(): offset = 0x%08x\n", offset);
-
+    uint64_t ret = 0;
     switch (offset) {
     case I2CCON:
-        return s->control;
+        ret = s->control;
+        break;
     case I2CSTAT:
-        return s->status;
+        ret = s->status;
+        break;
     case I2CADD:
-        return s->address;
+        ret = s->address;
+        break;
     case I2CDS:
-        s->iicreg20 |= 0x100;
+        // s->iicreg20 |= 0x100;
         s->data = S5L8702_i2c_receive(s);
-        return s->data;
+        ret = s->data;
+        break;
     case I2CLC:
-        return s->line_ctrl;
+        ret = s->line_ctrl;
+        break;
+    case IICUNK14:
+        ret = s->iicreg14;
+        break;
+    case IICUNK18:
+        ret = 0x0;
+        break;
     case IICREG20:
-        {
-            // clear the flags
-            uint32_t tmp_reg20 = s->iicreg20;
-            s->iicreg20 &= ~0x100;
-            s->iicreg20 &= ~0x2000;
-            return tmp_reg20; 
-        }
+        // clear the flags
+        uint32_t tmp_reg20 = s->iicreg20;
+        s->iicreg20 &= ~0x100;
+        s->iicreg20 &= ~0x2000;
+        break;
+    case IICREG28:
+        ret = s->iicreg28;
+        break;
     default:
-        // fprintf(stderr, "%s: bad read offset 0x%08x\n", __func__, offset);
-        //hw_error("S5L8702.i2c: bad read offset 0x" TARGET_FMT_plx "\n", offset);
+        printf("%s: bad read offset 0x%08x\n", __func__, offset);
         break;
     }
-    return 0;
+    printf("asserted_i2c_read(0x%08x, 0x%08x);\n", offset, ret);
+    // printf("S5L8702_i2c_read: 0x%08x => 0x%08x\n", offset, ret);
+    return ret;
 }
 
 /* I2C write function */
@@ -95,8 +106,8 @@ static void ipod_nano3g_i2c_write(void *opaque, hwaddr offset, uint64_t value, u
 {
     IPodNano3GI2CState *s = (IPodNano3GI2CState *)opaque;
     int mode;
-
-    // fprintf(stderr, "S5L8702_i2c_write: offset = 0x%08x, val = 0x%08x\n", offset, value);
+    // printf("S5L8702_i2c_write: 0x%08x <= 0x%08x\n", offset, value);
+    printf("asserted_i2c_write(0x%08x, 0x%08x);\n", offset, value);
 
     qemu_irq_lower(s->irq);
 
@@ -115,6 +126,16 @@ static void ipod_nano3g_i2c_write(void *opaque, hwaddr offset, uint64_t value, u
         if(value & 0x4 && s->active) {
             S5L8702_i2c_receive(s);
         }
+
+        if(value == 0) {
+            s->status = 0;
+            s->iicreg20 = 0;
+        }
+
+        if(value == 0x80 || value == 0x40) {
+            s->control = 0;
+        }
+
         break;
 
     case I2CSTAT:
@@ -133,6 +154,8 @@ static void ipod_nano3g_i2c_write(void *opaque, hwaddr offset, uint64_t value, u
         // printf("mode = %d\n", mode);
         if (value & S5L8702_IICSTAT_TXRXEN) {
             /* IIC-bus data output enable/disable bit */
+            s->control = 0;
+            s->status = 0;
             switch(mode) {
             case SR_MODE:
                 s->data = S5L8702_i2c_receive(s);
@@ -143,7 +166,7 @@ static void ipod_nano3g_i2c_write(void *opaque, hwaddr offset, uint64_t value, u
             case MR_MODE:
                 // printf("MR_MODE!\n");
                 if (value & S5L8702_IICSTAT_START) {
-                    // printf("MR_MODE: START!\n");
+                    // printf("asserted_i2c_write MR_MODE: START!\n");
                     /* START condition */
                     s->status &= ~S5L8702_IICSTAT_LASTBIT;
 
@@ -160,7 +183,7 @@ static void ipod_nano3g_i2c_write(void *opaque, hwaddr offset, uint64_t value, u
             case MT_MODE:
                 // printf("MT_MODE!\n");
                 if (value & S5L8702_IICSTAT_START) {
-                    // printf("MT_MODE: START!\n");
+                    // printf("asserted_i2c_write MT_MODE: START!\n");
                     /* START condition */
                     s->status &= ~S5L8702_IICSTAT_LASTBIT;
                         
@@ -195,12 +218,19 @@ static void ipod_nano3g_i2c_write(void *opaque, hwaddr offset, uint64_t value, u
     case I2CLC:
         s->line_ctrl = value & 0xff;
         break;
-
+    case IICUNK14:
+        s->iicreg14 = value & 0xff;
+        break;
+    case IICUNK18:
+        break;
     case IICREG20:
-        //s->iicreg20 &= ~value;
+        s->iicreg20 = value;
+        break;
+    case IICREG28:
+        s->iicreg28 = value & 0xff;
         break;
     default:
-        //fprintf(stderr, "%s: bad write offset 0x%08x\n", __func__, offset);
+        printf("%s: bad write offset 0x%08x\n", __func__, offset);
         //hw_error("S5L8702.i2c: bad write offset 0x" TARGET_FMT_plx "\n", offset);
         break;
     }
