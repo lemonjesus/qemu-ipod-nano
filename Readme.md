@@ -51,5 +51,5 @@ TODO
 ## Other Notes
 Run it with:
 ```
-./arm-softmmu/qemu-system-arm -M iPod-Touch,bootrom=/home/tucker/Development/qemu-ipod-nano/build/s5l8702-bootrom.bin,iboot=/home/tucker/Development/qemu-ipod-nano/build/iboot_204_n45ap.bin,nand=/home/tucker/Development/qemu-ipod-nano/build/nand -serial mon:stdio -cpu max -m 1G -d unimp -pflash /home/tucker/Development/qemu-ipod-nano/build/nor_image.bin
+reset && make -j12 && ./arm-softmmu/qemu-system-arm -s -S -M iPod-Nano3G,bootrom=/home/tucker/Development/qemu-ipod-nano/build/s5l8702-bootrom.bin,iboot=/home/tucker/Development/qemu-ipod-nano/build/iboot_204_n45ap.bin,nand=/home/tucker/Development/qemu-ipod-nano/build/nand -serial mon:stdio -cpu max -m 1G -d unimp
 ```

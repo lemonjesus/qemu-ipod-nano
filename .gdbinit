@@ -52,10 +52,12 @@ skip function efi_DxeMain_CoreLocateProtocol ()
 # diag load
 # break *0x8007150
 
-break *0x8014528
+# break *0x8014528
 # break *0x800fc64
 # break *0x800c624
-break *0x800640c
+break *0x80070e4
+#break *0x800fce8
+break *0x80057b4
 continue
 
 # table of contents of known global variables
